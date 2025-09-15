@@ -4,98 +4,102 @@ import traceback
 import pandas as pd
 import numpy as np
 
-def calculate_pip_value(symbol: str, symbol_info: Any = None, mt5_handler=None) -> float:
+def calculate_tick_value(symbol: str, symbol_info: Any = None, crypto_handler=None) -> float:
     """
-    Calculate the pip value for a given symbol.
+    Calculate the tick value for a given crypto symbol.
     
     Args:
-        symbol: The trading symbol
-        symbol_info: MT5 symbol_info object (optional)
-        mt5_handler: MT5Handler instance (optional, used if symbol_info is not provided)
+        symbol: The trading symbol (e.g., 'BTC/USDT:USDT')
+        symbol_info: Exchange symbol_info object (optional)
+        crypto_handler: CryptoHandler instance (optional, used if symbol_info is not provided)
         
     Returns:
-        float: The pip value for the symbol
+        float: The tick value for the symbol
     """
     try:
-        # Default pip value (fallback)
-        pip_value = 0.0001  # Default for forex 4-digit pairs
+        # Default tick value for crypto (typically 0.01 for most pairs)
+        tick_value = 0.01
         
-        # If symbol_info not provided and mt5_handler is available, get symbol info
-        if symbol_info is None and mt5_handler is not None:
-            symbol_info = mt5_handler.get_symbol_info(symbol)
+        # If symbol_info not provided and crypto_handler is available, get symbol info
+        if symbol_info is None and crypto_handler is not None:
+            symbol_info = crypto_handler.get_symbol_info(symbol)
         
         if symbol_info:
-            # Get point value and digits from symbol info
-            point = symbol_info.point
-            digits = symbol_info.digits
+            # Get price precision from symbol info
+            price_precision = symbol_info.get("price_precision", 2)
             
-            # Calculate pip value based on digits (standard practice in forex and CFDs)
-            if digits == 3 or digits == 5:  # 3 or 5 decimal places (common for forex)
-                pip_value = point * 10  # 1 pip = 10 points
-            elif digits == 2:  # 2 decimal places (common for JPY pairs)
-                pip_value = point * 10  # 1 pip = 10 points
-            elif digits == 1:  # 1 decimal place (some commodities and indices)
-                pip_value = point * 10  # 1 pip = 10 points
-            elif digits == 0:  # 0 decimal places (some cryptocurrencies)
-                pip_value = point * 10  # 1 pip = 10 points
+            # Calculate tick value based on precision
+            if price_precision == 0:
+                tick_value = 1.0  # For symbols with no decimal places
+            elif price_precision == 1:
+                tick_value = 0.1  # For symbols with 1 decimal place
+            elif price_precision == 2:
+                tick_value = 0.01  # For symbols with 2 decimal places
+            elif price_precision == 3:
+                tick_value = 0.001  # For symbols with 3 decimal places
+            elif price_precision == 4:
+                tick_value = 0.0001  # For symbols with 4 decimal places
+            elif price_precision == 5:
+                tick_value = 0.00001  # For symbols with 5 decimal places
+            elif price_precision == 6:
+                tick_value = 0.000001  # For symbols with 6 decimal places
             else:
-                pip_value = point  # Use point as pip for other cases
+                tick_value = 10 ** (-price_precision)  # General case
                 
-            logger.debug(f"Calculated pip value for {symbol}: point={point}, digits={digits}, pip_value={pip_value}")
-            return pip_value
+            logger.debug(f"Calculated tick value for {symbol}: precision={price_precision}, tick_value={tick_value}")
+            return tick_value
         
-        # Fallback to hard-coded values if MT5 info not available
-        # This should rarely happen but provides a safety mechanism
-        if symbol.startswith("GOLD") or symbol.startswith("XAU"):
-            pip_value = 0.01  # For gold
-        elif symbol.startswith("US") or symbol.startswith("NDX") or symbol.startswith("SPX"):
-            pip_value = 0.01  # For US indices
-        elif any(symbol.startswith(prefix) for prefix in ["Crash", "Boom", "Jump", "Volatility", "Range", "Step"]):
-            pip_value = 0.001  # Synthetic indices typically have 3 digits
-        elif symbol.endswith("JPY"):
-            pip_value = 0.01  # For JPY pairs
+        # Fallback to hard-coded values for common crypto pairs
+        if "BTC" in symbol.upper():
+            tick_value = 0.01  # Bitcoin typically has 2 decimal places
+        elif "ETH" in symbol.upper():
+            tick_value = 0.01  # Ethereum typically has 2 decimal places
+        elif "USDT" in symbol.upper() and any(coin in symbol.upper() for coin in ["BTC", "ETH", "BNB", "ADA", "SOL"]):
+            tick_value = 0.0001  # Major crypto/USDT pairs typically have 4 decimal places
+        elif "USDC" in symbol.upper():
+            tick_value = 0.0001  # USDC pairs typically have 4 decimal places
         
-        logger.warning(f"Using fallback pip value for {symbol}: {pip_value}")
-        return pip_value
+        logger.warning(f"Using fallback tick value for {symbol}: {tick_value}")
+        return tick_value
         
     except Exception as e:
-        logger.error(f"Error calculating pip value for {symbol}: {str(e)}")
+        logger.error(f"Error calculating tick value for {symbol}: {str(e)}")
         logger.error(traceback.format_exc())
-        return 0.0001  # Return default value in case of error
+        return 0.01  # Return default value in case of error
     
-def convert_pips_to_price(pips: float, symbol: str, symbol_info: Any = None, mt5_handler=None) -> float:
+def convert_ticks_to_price(ticks: float, symbol: str, symbol_info: Any = None, crypto_handler=None) -> float:
     """
-    Convert pips to price value for a symbol.
+    Convert ticks to price value for a crypto symbol.
     
     Args:
-        pips: Number of pips
+        ticks: Number of ticks
         symbol: The trading symbol
-        symbol_info: MT5 symbol_info object (optional)
-        mt5_handler: MT5Handler instance (optional, used if symbol_info is not provided)
+        symbol_info: Exchange symbol_info object (optional)
+        crypto_handler: CryptoHandler instance (optional, used if symbol_info is not provided)
         
     Returns:
-        float: The price equivalent of the given pips
+        float: The price equivalent of the given ticks
     """
-    pip_value = calculate_pip_value(symbol, symbol_info, mt5_handler)
-    return pips * pip_value
+    tick_value = calculate_tick_value(symbol, symbol_info, crypto_handler)
+    return ticks * tick_value
 
-def convert_price_to_pips(price_diff: float, symbol: str, symbol_info: Any = None, mt5_handler=None) -> float:
+def convert_price_to_ticks(price_diff: float, symbol: str, symbol_info: Any = None, crypto_handler=None) -> float:
     """
-    Convert price difference to pips for a symbol.
+    Convert price difference to ticks for a crypto symbol.
     
     Args:
         price_diff: Price difference
         symbol: The trading symbol
-        symbol_info: MT5 symbol_info object (optional)
-        mt5_handler: MT5Handler instance (optional, used if symbol_info is not provided)
+        symbol_info: Exchange symbol_info object (optional)
+        crypto_handler: CryptoHandler instance (optional, used if symbol_info is not provided)
         
     Returns:
-        float: The pip equivalent of the given price difference
+        float: The tick equivalent of the given price difference
     """
-    pip_value = calculate_pip_value(symbol, symbol_info, mt5_handler)
-    if pip_value == 0:
+    tick_value = calculate_tick_value(symbol, symbol_info, crypto_handler)
+    if tick_value == 0:
         return 0  # Avoid division by zero
-    return price_diff / pip_value 
+    return price_diff / tick_value 
 
 def adjust_trade_for_spread(
     symbol: str,
@@ -103,7 +107,7 @@ def adjust_trade_for_spread(
     entry_price: float,
     stop_loss: float,
     take_profit: float,
-    mt5_handler: Any  # MT5Handler instance
+    crypto_handler: Any  # CryptoHandler instance
 ) -> Tuple[float, float, float, float]:
     """
     Adjusts SL/TP based on the current spread to maintain intended risk/reward.
@@ -114,14 +118,14 @@ def adjust_trade_for_spread(
         entry_price (float): The signal's entry price.
         stop_loss (float): The signal's stop loss.
         take_profit (float): The signal's take profit.
-        mt5_handler (Any): An instance of the MT5Handler.
+        crypto_handler (Any): An instance of the CryptoHandler.
 
     Returns:
         Tuple[float, float, float, float]: A tuple containing the actual_entry_price, 
                                            adjusted_stop_loss, and adjusted_take_profit, spread.
     """
     try:
-        tick_info = mt5_handler.get_last_tick(symbol)
+        tick_info = crypto_handler.get_last_tick(symbol)
         if not tick_info:
             logger.error(f"Could not retrieve tick info for {symbol} to adjust for spread.")
             return entry_price, stop_loss, take_profit, 0.0
@@ -130,19 +134,19 @@ def adjust_trade_for_spread(
         
         if order_type.upper() == 'BUY':
             actual_entry_price = tick_info['ask']
-            risk_pips = entry_price - stop_loss
-            reward_pips = take_profit - entry_price
+            risk_ticks = entry_price - stop_loss
+            reward_ticks = take_profit - entry_price
             
-            new_stop_loss = actual_entry_price - risk_pips
-            new_take_profit = actual_entry_price + reward_pips
+            new_stop_loss = actual_entry_price - risk_ticks
+            new_take_profit = actual_entry_price + reward_ticks
             
         elif order_type.upper() == 'SELL':
             actual_entry_price = tick_info['bid']
-            risk_pips = stop_loss - entry_price
-            reward_pips = entry_price - take_profit
+            risk_ticks = stop_loss - entry_price
+            reward_ticks = entry_price - take_profit
 
-            new_stop_loss = actual_entry_price + risk_pips
-            new_take_profit = actual_entry_price - reward_pips
+            new_stop_loss = actual_entry_price + risk_ticks
+            new_take_profit = actual_entry_price - reward_ticks
         else:
             logger.warning(f"Unknown order type '{order_type}' for spread adjustment.")
             return entry_price, stop_loss, take_profit, 0.0

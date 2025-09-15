@@ -8,12 +8,15 @@ load_dotenv()
 # --- Base paths ---
 BASE_DIR = Path(__file__).parent.parent
 
-# ================= MT5 Configuration =================
-MT5_CONFIG = {
-    "server": os.getenv("MT5_SERVER", "MetaQuotes-Demo"),
-    "login": int(os.getenv("MT5_LOGIN", "0")),
-    "password": os.getenv("MT5_PASSWORD", ""),
+# ================= Crypto Configuration =================
+CRYPTO_CONFIG = {
+    "exchange": os.getenv("CRYPTO_EXCHANGE", "bybit"),  # bybit, binance
+    "api_key": os.getenv("CRYPTO_API_KEY", ""),
+    "api_secret": os.getenv("CRYPTO_API_SECRET", ""),
+    "sandbox": os.getenv("CRYPTO_SANDBOX", "true").lower() == "true",
     "timeout": 10,
+    "retry_attempts": 3,
+    "rate_limit": True,
 }
 
 # ================= Trading Configuration =================
@@ -21,29 +24,16 @@ TRADING_CONFIG = {
     "account_type": "demo",  # "real" or "demo"
     "magic_number": 1235, # Unique identifier for this bot's trades
     "symbols": [
-        "Volatility 10 Index",
-        "Crash 500 Index",
-        "Crash 1000 Index",
-        "Boom 300 Index",
-        # "XAUUSD",
-        "BTCUSD",
-        "ETHUSD",
-        "XRPUSD",
-        "SOLUSD",
-        "DOGUSD",
-        "ADAUSD",
-        "DOTUSD",
-        "Boom 1000 Index",
-        "Jump 50 Index",
-        "Jump 75 Index",
-        "Step Index",
-        "Range Break 200 Index",
-        # "GBPUSD",
-        # "EURUSD",
-        # "USDJPY",
-        # "USDCAD",
-        # "AUDUSD",
-        # "NZDUSD",
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT",
+        "SOL/USDT:USDT",
+        "ADA/USDT:USDT",
+        "DOT/USDT:USDT",
+        "XRP/USDT:USDT",
+        "DOGE/USDT:USDT",
+        "AVAX/USDT:USDT",
+        "MATIC/USDT:USDT",
+        "LINK/USDT:USDT",
     ],
     "fixed_lot_size": 1.0,
     "use_fixed_lot_size": False,
@@ -70,15 +60,14 @@ TRADING_CONFIG = {
 
     "close_positions_on_shutdown": False,
     "signal_generators": [
-       # "MintAlgoStrategy",
-        #"SuperT",
-        #"GarbageAlgoStrategy",
-        #"ExhaustionReversalStrategy",
-        #"AlphaFusionScalper",
-        #"AlphaFusionScalper2",
-        #"AlphaQuantScalperV1",
-        "MeanReversionScalper",
-        #"LuxAlgoPremiumStrategy"
+        "VolumeMAOscillator",
+        # "MeanReversionScalper",
+        # "SuperT",
+        # "GarbageAlgoStrategy",
+        # "ExhaustionReversalStrategy",
+        # "AlphaFusionScalper",
+        # "AlphaFusionScalper2",
+        # "AlphaQuantScalperV1",
     ],
 }
 

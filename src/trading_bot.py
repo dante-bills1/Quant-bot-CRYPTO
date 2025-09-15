@@ -12,7 +12,7 @@ from loguru import logger
 import copy
 import pandas as pd
 
-from src.mt5_handler import MT5Handler
+# MT5Handler removed - using CryptoHandler instead
 from src.risk_manager import RiskManager
 from src.telegram.telegram_bot import TelegramBot
 from src.telegram.telegram_command_handler import TelegramCommandHandler
@@ -26,24 +26,24 @@ from src.utils.data_manager import DataManager
 class SignalGenerator:
     """Base SignalGenerator class that all signal generators should extend."""
     
-    def __init__(self, mt5_handler=None, risk_manager=None, **kwargs):
+    def __init__(self, crypto_handler=None, risk_manager=None, **kwargs):
         """
         Initialize the signal generator.
         
         Args:
-            mt5_handler: MT5Handler instance
+            crypto_handler: CryptoHandler instance
             risk_manager: RiskManager instance
             **kwargs: Additional keyword arguments
         """
-        self.mt5_handler = mt5_handler
+        self.crypto_handler = crypto_handler
         self.risk_manager = risk_manager
         self.name = self.__class__.__name__
         
-        # Log which MT5Handler instance we're using
-        if self.mt5_handler:
-            logger.info(f"SignalGenerator {self.name} using MT5Handler instance: {id(self.mt5_handler)}")
+        # Log which CryptoHandler instance we're using
+        if self.crypto_handler:
+            logger.info(f"SignalGenerator {self.name} using CryptoHandler instance: {id(self.crypto_handler)}")
         else:
-            logger.warning(f"No MT5Handler passed to {self.name} - this might cause connection issues")
+            logger.warning(f"No CryptoHandler passed to {self.name} - this might cause connection issues")
        
         self.primary_timeframe = None  # Subclasses must override
         
@@ -91,14 +91,14 @@ class TradingBot:
         # Load default configurations
         from config.config import TRADING_CONFIG as DEFAULT_TRADING_CONFIG
         from config.config import TELEGRAM_CONFIG as DEFAULT_TELEGRAM_CONFIG
-        from config.config import MT5_CONFIG as DEFAULT_MT5_CONFIG
+        from config.config import CRYPTO_CONFIG as DEFAULT_CRYPTO_CONFIG
 
         passed_config = config or {}
 
         # Start with deep copies of defaults
         self.trading_config = copy.deepcopy(DEFAULT_TRADING_CONFIG)
         self.telegram_config = copy.deepcopy(DEFAULT_TELEGRAM_CONFIG)
-        self.mt5_config = copy.deepcopy(DEFAULT_MT5_CONFIG)
+        self.crypto_config = copy.deepcopy(DEFAULT_CRYPTO_CONFIG)
 
         
         if passed_config:
@@ -113,10 +113,10 @@ class TradingBot:
             elif "telegram" in passed_config:
                  logger.warning("External config 'telegram' key is not a dictionary or is None. Using default telegram_config values, not merging.")
 
-            if "mt5" in passed_config and isinstance(passed_config["mt5"], dict):
-                self.mt5_config.update(passed_config["mt5"])
-            elif "mt5" in passed_config:
-                 logger.warning("External config 'mt5' key is not a dictionary or is None. Using default mt5_config values, not merging.")
+            if "crypto" in passed_config and isinstance(passed_config["crypto"], dict):
+                self.crypto_config.update(passed_config["crypto"])
+            elif "crypto" in passed_config:
+                 logger.warning("External config 'crypto' key is not a dictionary or is None. Using default crypto_config values, not merging.")
         else:
             logger.info("No external config provided, using default configurations from config.py.")
 
