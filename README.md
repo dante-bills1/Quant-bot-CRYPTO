@@ -331,3 +331,5 @@ Modify the `RiskManager` class in `src/risk_manager.py` to implement custom risk
 
 This project is licensed under the MIT License. 
 
+#   Q u a n t - b o t - C R Y P T O  
+ 
