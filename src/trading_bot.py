@@ -13,6 +13,7 @@ import copy
 import pandas as pd
 
 # MT5Handler removed - using CryptoHandler instead
+from src.crypto_handler import CryptoHandler
 from src.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
 from src.crypto_telegram_command_handler import CryptoTelegramCommandHandler
@@ -286,10 +287,10 @@ class TradingBot:
 
         while not self.shutdown_requested:
             try:
-                if not self.mt5_handler.is_connected():
-                    logger.warning("MT5 disconnected. Pausing event loop.")
+                if not self.crypto_handler.is_connected():
+                    logger.warning("Crypto exchange disconnected. Pausing event loop.")
                     await asyncio.sleep(10)
-                    self.mt5_handler.initialize()
+                    await self.crypto_handler.initialize()
                     continue
 
                 # Step 1: Check for and load new closed candles first.
@@ -324,15 +325,19 @@ class TradingBot:
 
     async def _process_live_tick_for_symbol(self, symbol: str):
         """ Processes a single live tick for a symbol if it's new. """
-        latest_tick = self.mt5_handler.get_last_tick(symbol)
+        latest_tick = await self.crypto_handler.get_last_tick(symbol)
         if not latest_tick:
             return
 
         last_known_tick_time = self.last_tick_times.get(symbol, 0)
         
-        # MT5 tick time is in milliseconds
-        if latest_tick['time_msc'] > last_known_tick_time:
-            self.last_tick_times[symbol] = latest_tick['time_msc']
+        # Crypto tick time is in milliseconds (converted from seconds)
+        tick_time = latest_tick.get('time', 0)
+        if isinstance(tick_time, float):
+            tick_time = int(tick_time * 1000)  # Convert seconds to milliseconds if needed
+
+        if tick_time > last_known_tick_time:
+            self.last_tick_times[symbol] = tick_time
 
             # Debounce analysis to avoid over-processing
             now = time.time()
@@ -371,10 +376,10 @@ class TradingBot:
 
         while not self.shutdown_requested:
             try:
-                if not self.mt5_handler.is_connected():
-                    logger.warning("MT5 disconnected. Pausing candle checks.")
+                if not self.crypto_handler.is_connected():
+                    logger.warning("Crypto exchange disconnected. Pausing candle checks.")
                     await asyncio.sleep(10)
-                    self.mt5_handler.initialize()
+                    await self.crypto_handler.initialize()
                     continue
 
                 check_tasks = [
@@ -403,12 +408,12 @@ class TradingBot:
 
         if last_known_timestamp is None:
             logger.warning(f"[{symbol}/{timeframe}] Missing initial timestamp in live loop. Re-initializing.")
-            latest_ts = self.mt5_handler.get_latest_candle_time(symbol, timeframe)
+            latest_ts = await self.crypto_handler.get_latest_candle_time(symbol, timeframe)
             if latest_ts:
                 self.last_candle_timestamps[key] = latest_ts
             return
 
-        latest_timestamp = self.mt5_handler.get_latest_candle_time(symbol, timeframe)
+        latest_timestamp = await self.crypto_handler.get_latest_candle_time(symbol, timeframe)
         if latest_timestamp is None:
             return
 
@@ -539,7 +544,7 @@ class TradingBot:
                     logger.info(f"Found generator class for '{generator_name}': {generator_class.__name__}")
                     
                     generator = generator_class(
-                        mt5_handler=self.mt5_handler,
+                        crypto_handler=self.crypto_handler,
                         risk_manager=self.risk_manager
                     )
                     self.signal_generators.append(generator)
@@ -599,15 +604,6 @@ class TradingBot:
         try:
             self.running = True
             logger.info("Starting trading bot...")
-            
-            # Initialize MT5 connection if needed
-            if self.mt5_handler is not None and not getattr(self.mt5_handler, 'connected', False):
-                logger.info("Initializing MT5 connection...")
-                if not self.mt5_handler.initialize():
-                    logger.error("Failed to initialize MT5 connection")
-                    self.running = False
-                    self.shutdown_future.set_result(False)
-                    return self.shutdown_future
             
             # Make sure we have our symbols list
             if not self.symbols:
@@ -843,10 +839,10 @@ class TradingBot:
         Format: /status
         """
         # Get account info
-        account_info = self.mt5_handler.get_account_info() if self.mt5_handler is not None else {}
+        account_info = await self.crypto_handler.get_account_info() if self.crypto_handler is not None else {}
         
         # Get open positions
-        positions = self.mt5_handler.get_open_positions() if self.mt5_handler is not None else []
+        positions = await self.crypto_handler.get_open_positions(self.magic_number) if self.crypto_handler is not None else []
         
         # Build status message
         status = f"🤖 Trading Bot Status\n{'='*20}\n"
@@ -868,19 +864,19 @@ class TradingBot:
         # Position summary
         status += f"Open Positions: {len(positions)}\n"
         if positions:
-            total_profit = sum(pos["profit"] for pos in positions)
+            total_profit = sum(pos.get("pnl", 0) for pos in positions)
             status += f"Total Floating P/L: {total_profit}\n\n"
             
             # List first 5 positions
             status += "Recent Positions:\n"
             for pos in positions[:5]:
-                pos_type = "BUY" if pos["type"] == 0 else "SELL"
-                if self.mt5_handler is not None:
-                    result = self.mt5_handler.close_position(pos["ticket"])
-                    logger.info(f"Position {pos['ticket']} close result: {result}")
+                pos_type = pos.get("side", "BUY").upper()
+                if self.crypto_handler is not None:
+                    result = await self.crypto_handler.close_position(pos["id"], self.magic_number)
+                    logger.info(f"Position {pos['id']} close result: {result}")
                 else:
-                    logger.error("MT5 handler is not initialized, cannot close position.")
-                status += f"- {pos['symbol']} {pos_type}: {pos['profit']}\n"
+                    logger.error("Crypto handler is not initialized, cannot close position.")
+                status += f"- {pos['symbol']} {pos_type}: {pos.get('pnl', 0)}\n"
             
             if len(positions) > 5:
                 status += f"...and {len(positions) - 5} more\n"
@@ -894,7 +890,7 @@ class TradingBot:
         while self.running and not self.shutdown_requested:
             try:
                 # Check for active positions first
-                active_positions = self.mt5_handler.get_open_positions() if self.mt5_handler is not None else []
+                active_positions = await self.crypto_handler.get_open_positions(self.magic_number) if self.crypto_handler is not None else []
                 
                 if not active_positions:
                     # No open positions, no need to check market status or manage trades
@@ -908,7 +904,7 @@ class TradingBot:
                 # Check if any of the markets for the active positions are open
                 markets_open = False
                 for symbol in active_symbols:
-                    if self.is_market_open(symbol):
+                    if await self.is_market_open(symbol):
                         markets_open = True
                         break
                 
@@ -1100,7 +1096,7 @@ class TradingBot:
         logger.info("Disabled automatic closing of positions on shutdown")
         return "✅ Automatic closing of positions on shutdown is now DISABLED"
             
-    def is_market_open(self, symbol=None) -> bool:
+    async def is_market_open(self, symbol=None) -> bool:
         """
         Check if the market is currently open for trading based on tick activity.
         
@@ -1118,17 +1114,17 @@ class TradingBot:
                 
                 # Return True if any symbol is open
                 for sym in symbols_to_check:
-                    if self.is_market_open(sym):
+                    if await self.is_market_open(sym):
                         return True
                 return False
             
             # For a specific symbol, check for recent tick activity
-            if not hasattr(self, 'mt5_handler') or not self.mt5_handler:
-                logger.warning("MT5 handler not available for tick-based market detection")
+            if not hasattr(self, 'crypto_handler') or not self.crypto_handler:
+                logger.warning("Crypto handler not available for tick-based market detection")
                 return False
                 
             # Get the latest tick
-            latest_tick = self.mt5_handler.get_last_tick(symbol)
+            latest_tick = await self.crypto_handler.get_last_tick(symbol)
             if latest_tick is None:
                 logger.debug(f"No tick data available for {symbol}, market likely closed")
                 return False
@@ -1136,6 +1132,9 @@ class TradingBot:
             # Check tick freshness to determine if market is open
             now = time.time()
             tick_time = latest_tick.get('time', 0)
+            if isinstance(tick_time, float) and tick_time < 1e10:  # If in seconds, convert to milliseconds
+                tick_time = tick_time * 1000
+            tick_time = tick_time / 1000  # Convert back to seconds for comparison
             time_diff = now - tick_time
             
             # Consider market open if tick is recent (within last 1 minute)
@@ -1245,9 +1244,9 @@ class TradingBot:
         try:
             logger.info("Initializing performance tracker...")
             
-            # Ensure MT5 handler is set correctly (in case it was reset)
-            if hasattr(self, "mt5_handler") and self.mt5_handler:
-                self.performance_tracker.set_mt5_handler(self.mt5_handler)
+            # Ensure crypto handler is set correctly (in case it was reset)
+            if hasattr(self, "crypto_handler") and self.crypto_handler:
+                self.performance_tracker.set_crypto_handler(self.crypto_handler)
                 
                 # Fetch and update metrics
                 metrics = await self.performance_tracker.update_performance_metrics()
@@ -1279,7 +1278,7 @@ class TradingBot:
                 
                 logger.info("Performance tracker initialization completed successfully")
             else:
-                logger.warning("MT5 handler not available, performance metrics initialization skipped")
+                logger.warning("Crypto handler not available, performance metrics initialization skipped")
                 
         except Exception as e:
             logger.error(f"Error initializing performance tracker: {str(e)}")
@@ -1324,22 +1323,22 @@ class TradingBot:
                 logger.info("Closing all positions before shutdown")
                 try:
                     # Get a list of positions to close
-                    positions = self.mt5_handler.get_open_positions() if self.mt5_handler is not None else []
+                    positions = await self.crypto_handler.get_open_positions(self.magic_number) if self.crypto_handler is not None else []
                     
                     if positions:
                         logger.info(f"Found {len(positions)} positions to close")
                         for pos in positions:
-                            if self.mt5_handler is not None:
-                                result = self.mt5_handler.close_position(pos["ticket"])
-                                logger.info(f"Position {pos['ticket']} close result: {result}")
+                            if self.crypto_handler is not None:
+                                result = await self.crypto_handler.close_position(pos["id"], self.magic_number)
+                                logger.info(f"Position {pos['id']} close result: {result}")
                             else:
-                                logger.error("MT5 handler is not initialized, cannot close position.")
+                                logger.error("Crypto handler is not initialized, cannot close position.")
                     else:
                         logger.info("No open positions to close")
                 except Exception as e:
                     logger.error(f"Error closing positions: {str(e)}")
             
-            # Don't shutdown MT5 handler automatically - it can be reused
+            # Don't shutdown crypto handler automatically - it can be reused
             # and shutting it down can cause problems with other operations
             
             # Notify on telegram if enabled
@@ -1361,26 +1360,20 @@ class TradingBot:
             logger.info("Initializing trading bot")
             self.stop_requested = False
             
-            # Create MT5Handler if not already created
-            if not hasattr(self, 'mt5_handler') or not self.mt5_handler:
-                logger.info("Creating MT5Handler instance")
-                self.mt5_handler = MT5Handler()
-                # Initialize connection to MT5
-                mt5_initialized = self.mt5_handler.initialize()
-                if not mt5_initialized:
-                    logger.error("Failed to initialize MT5 connection")
-                    return False
-                logger.info("MT5 Handler initialized and connected")
+            # Ensure CryptoHandler is initialized
+            if not hasattr(self, 'crypto_handler') or not self.crypto_handler:
+                logger.error("CryptoHandler not available - it should be initialized in __init__")
+                return False
             else:
-                logger.info("Using existing MT5Handler instance")
-                # Ensure MT5 is connected
-                if not getattr(self.mt5_handler, 'connected', False):
-                    logger.info("Reconnecting existing MT5Handler")
-                    mt5_initialized = self.mt5_handler.initialize()
-                    if not mt5_initialized:
-                        logger.error("Failed to reconnect existing MT5Handler")
+                logger.info("Using existing CryptoHandler instance")
+                # Ensure crypto connection is working
+                if not getattr(self.crypto_handler, 'connected', False):
+                    logger.info("Initializing CryptoHandler connection")
+                    crypto_initialized = await self.crypto_handler.initialize()
+                    if not crypto_initialized:
+                        logger.error("Failed to initialize crypto connection")
                         return False
-                    logger.info("Existing MT5Handler reconnected successfully")
+                    logger.info("CryptoHandler initialized and connected successfully")
             
             # Initialize and start Telegram bot if available
             if self.telegram_bot:
@@ -1393,29 +1386,33 @@ class TradingBot:
                     logger.error(traceback.format_exc())
                     # Continue with initialization even if Telegram fails
             
-            # Create other components that depend on MT5Handler
+            # Create other components that depend on CryptoHandler
             # Initialize risk manager
-            self.risk_manager = RiskManager()
+            self.risk_manager = CryptoRiskManager(
+                crypto_handler=self.crypto_handler
+            )
             
-            # Initialize Signal Processor with the shared MT5Handler
-            self.signal_processor = SignalProcessor(
-                mt5_handler=self.mt5_handler,
+            # Initialize Signal Processor with crypto components
+            self.signal_processor = CryptoSignalProcessor(
+                crypto_handler=self.crypto_handler,
                 risk_manager=self.risk_manager,
                 telegram_bot=self.telegram_bot,
                 config=self.config
             )
-            logger.info("Signal processor initialized with shared MT5Handler")
-            
-            # Initialize Position Manager with the shared MT5Handler
-            self.position_manager = PositionManager(
-                mt5_handler=self.mt5_handler,
-                telegram_bot=self.telegram_bot
+            logger.info("Signal processor initialized with crypto components")
+
+            # Initialize Position Manager with crypto components
+            self.position_manager = CryptoPositionManager(
+                crypto_handler=self.crypto_handler,
+                risk_manager=self.risk_manager,
+                telegram_bot=self.telegram_bot,
+                config=self.config
             )
-            logger.info("Position manager initialized with shared MT5Handler")
-            
-            # Initialize signal generators with the shared MT5Handler
+            logger.info("Position manager initialized with crypto components")
+
+            # Initialize signal generators with crypto components
             await self._initialize_signal_generators()
-            logger.info("Signal generators initialized with shared MT5Handler")
+            logger.info("Signal generators initialized with crypto components")
             
         
         except Exception as e:
@@ -1525,6 +1522,6 @@ class TradingBot:
                 continue
             for symbol in self.symbols:
                 for tf in sg.required_timeframes:
-                    ts = self.mt5_handler.get_latest_candle_time(symbol, tf)
+                    ts = await self.crypto_handler.get_latest_candle_time(symbol, tf)
                     if ts:
                         self.last_candle_timestamps[(symbol, tf)] = ts
