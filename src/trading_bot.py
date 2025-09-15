@@ -15,10 +15,10 @@ import pandas as pd
 # MT5Handler removed - using CryptoHandler instead
 from src.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
-from src.telegram.telegram_command_handler import TelegramCommandHandler
+from src.crypto_telegram_command_handler import CryptoTelegramCommandHandler
 from src.crypto_position_manager import CryptoPositionManager
 from src.crypto_signal_processor import CryptoSignalProcessor
-from src.utils.performance_tracker import PerformanceTracker
+from src.crypto_performance_tracker import CryptoPerformanceTracker
 from src.crypto_data_manager import CryptoDataManager
 
 
@@ -173,7 +173,7 @@ class TradingBot:
         self.telegram_bot = TelegramBot.get_instance()
         
         # Initialize telegram command handler
-        self.telegram_command_handler = TelegramCommandHandler(self, self.crypto_handler)
+        self.telegram_command_handler = CryptoTelegramCommandHandler(self, self.crypto_handler)
         
         # Initialize position manager
         self.position_manager = CryptoPositionManager(
@@ -204,8 +204,8 @@ class TradingBot:
                 self.signal_processor.tick_delay_tolerance = data_management_config.get("tick_delay_tolerance", 2.0)
         
         # Initialize performance tracker
-        self.performance_tracker = PerformanceTracker(
-            mt5_handler=self.mt5_handler,
+        self.performance_tracker = CryptoPerformanceTracker(
+            crypto_handler=self.crypto_handler,
             config=self.config
         )
         

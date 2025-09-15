@@ -68,7 +68,7 @@ def display_startup_info():
     
     print(f"{BOLD}{CYAN}🔧 SYSTEM INITIALIZATION{RESET}")
     print(f"{WHITE}├─{RESET} {GREEN}Loading Configuration...{RESET}")
-    print(f"{WHITE}├─{RESET} {GREEN}Establishing MT5 Connection...{RESET}")
+    print(f"{WHITE}├─{RESET} {GREEN}Establishing Crypto Exchange Connection...{RESET}")
     print(f"{WHITE}├─{RESET} {GREEN}Initializing Trading Algorithms...{RESET}")
     print(f"{WHITE}├─{RESET} {GREEN}Setting up Telegram Integration...{RESET}")
     print(f"{WHITE}└─{RESET} {YELLOW}Ready for Trading Operations{RESET}")
@@ -81,7 +81,7 @@ load_dotenv(override=True)
 display_banner()
 
 from config.config import (
-    MT5_CONFIG,
+    CRYPTO_CONFIG,
     TRADING_CONFIG,
     TELEGRAM_CONFIG,
     LOG_CONFIG,
@@ -108,16 +108,16 @@ async def main():
         CYAN = '\033[96m'
         RESET = '\033[0m'
         
-        logging.info(f"Using MT5 server: {MT5_CONFIG['server']}")
-        logging.info(f"Using MT5 login: {MT5_CONFIG['login']}")
-        
-        print(f"\n{BOLD}{GREEN}🟢 QANT BOT ONLINE{RESET}")
+        logging.info(f"Using crypto exchange: {CRYPTO_CONFIG['exchange']}")
+        logging.info(f"Using sandbox mode: {CRYPTO_CONFIG['sandbox']}")
+
+        print(f"\n{BOLD}{GREEN}🟢 CRYPTO TRADING BOT ONLINE{RESET}")
         print(f"{CYAN}📡 Contact: @dante_billz on Telegram{RESET}")
         print(f"{CYAN}{'═' * 50}{RESET}\n")
-        
+
         # Simple config object for TradingBot
         config = dict(
-            MT5_CONFIG=MT5_CONFIG,
+            CRYPTO_CONFIG=CRYPTO_CONFIG,
             TRADING_CONFIG=TRADING_CONFIG,
             TELEGRAM_CONFIG=TELEGRAM_CONFIG,
             LOG_CONFIG=LOG_CONFIG

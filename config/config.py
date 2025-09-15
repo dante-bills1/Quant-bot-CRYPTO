@@ -133,16 +133,18 @@ TRADE_EXIT_CONFIG = {
             {'symbol_is': 'XAUUSD', 'category': 'metals_gold'},
             {'symbol_is': 'BTCUSD', 'category': 'crypto_btc'},
 
-            # MT5 Path Based (examples, adjust to your broker's paths)
-            {'path_contains': 'Forex\\\\Major', 'category': 'forex_major'},
-            {'path_contains': 'Forex\\\\Minor', 'category': 'forex_minor'},
-            {'path_contains': 'Forex\\\\Exotic', 'category': 'forex_exotic'},
-            {'path_contains': 'Indices\\\\Volatility', 'category': 'volatility_indices'},
-            {'path_contains': 'Indices\\\\CrashBoom', 'category': 'crash_boom_indices'}, # Assuming a path like "Indices\CrashBoom\Crash 500 Index"
-            {'path_contains': 'Indices\\\\Jump', 'category': 'jump_indices'},
-            {'path_contains': 'Indices\\\\StepRange', 'category': 'step_range_indices'}, # Assuming "Indices\StepRange\Step Index"
-            {'path_contains': 'Metals', 'category': 'metals_other'}, # For other metals if XAUUSD is special
-            {'path_contains': 'Crypto', 'category': 'crypto_other'}, # For other cryptos if BTCUSD is special
+            # Crypto Exchange Based (crypto-specific categories)
+            {'symbol_contains': ':USDT', 'category': 'crypto_stablecoin_pairs'}, # USDT pairs
+            {'symbol_contains': ':USDC', 'category': 'crypto_stablecoin_pairs'}, # USDC pairs
+            {'symbol_contains': ':BUSD', 'category': 'crypto_stablecoin_pairs'}, # BUSD pairs
+            {'symbol_contains': 'BTC', 'category': 'crypto_bitcoin'}, # Bitcoin related
+            {'symbol_contains': 'ETH', 'category': 'crypto_ethereum'}, # Ethereum related
+            {'symbol_contains': 'SOL', 'category': 'crypto_solana'}, # Solana related
+            {'symbol_contains': 'ADA', 'category': 'crypto_cardano'}, # Cardano related
+            {'symbol_contains': 'DOT', 'category': 'crypto_polkadot'}, # Polkadot related
+            {'symbol_contains': 'LINK', 'category': 'crypto_chainlink'}, # Chainlink related
+            {'symbol_contains': 'UNI', 'category': 'crypto_uniswap'}, # Uniswap related
+            {'symbol_contains': 'AAVE', 'category': 'crypto_aave'}, # Aave related
 
             # Fallback Regex/Symbol Name Contains (lower priority)
             {'symbol_contains': 'EUR', 'category': 'forex_eur_pairs'}, # Example for EUR specific

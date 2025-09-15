@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from .. import crud, schemas
 from ..database import get_db
-from ..mt5_service import mt5_service
+from ..crypto_service import get_crypto_service
 
 router = APIRouter(
     prefix="/api/dashboard",
@@ -30,15 +30,25 @@ def read_dashboard_data(
     }
 
 @router.get("/account-info")
-def get_live_account_info():
+async def get_live_account_info():
     """
-    Endpoint to get live account information (balance, equity) from MT5.
+    Endpoint to get live account information (balance, equity) from crypto exchange.
     """
-    account_info = mt5_service.get_account_info()
-    if account_info:
+    crypto_service = get_crypto_service()
+    account_info = await crypto_service.get_account_info()
+    if account_info.get("success", False):
+        balance_data = account_info.get("balance", {})
+        # Calculate total balance in USDT or equivalent
+        total_balance = 0.0
+        for currency, data in balance_data.items():
+            if currency.upper() in ['USDT', 'USDC', 'BUSD']:
+                total_balance += data.get("total", 0)
+
         return {
-            "balance": account_info.get("balance"),
-            "equity": account_info.get("equity"),
-            "profit": account_info.get("profit")
+            "balance": total_balance,
+            "equity": total_balance,  # For crypto, balance = equity
+            "profit": 0.0,  # Would need to calculate unrealized P&L
+            "exchange": account_info.get("exchange"),
+            "connected": account_info.get("connected", False)
         }
     return {"error": "Could not retrieve account information"} 
