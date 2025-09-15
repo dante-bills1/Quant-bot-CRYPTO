@@ -13,13 +13,13 @@ import copy
 import pandas as pd
 
 # MT5Handler removed - using CryptoHandler instead
-from src.risk_manager import RiskManager
+from src.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
 from src.telegram.telegram_command_handler import TelegramCommandHandler
-from src.utils.position_manager import PositionManager
-from src.utils.signal_processor import SignalProcessor
+from src.crypto_position_manager import CryptoPositionManager
+from src.crypto_signal_processor import CryptoSignalProcessor
 from src.utils.performance_tracker import PerformanceTracker
-from src.utils.data_manager import DataManager
+from src.crypto_data_manager import CryptoDataManager
 
 
 # Define a base SignalGenerator class if it doesn't exist elsewhere
@@ -126,33 +126,33 @@ class TradingBot:
         # Initialize market status tracking
         self.market_status = {}  # Track market open/closed status for each symbol
         
-        # Initialize MT5 handler first (needed by other components)
-        mt5_handler_candidate = self.config.get('mt5_handler') # Check from original passed_config
-        if isinstance(mt5_handler_candidate, MT5Handler):
-            self.mt5_handler = mt5_handler_candidate
-            logger.info(f"Using provided MT5Handler instance from passed_config.")
+        # Initialize Crypto handler first (needed by other components)
+        crypto_handler_candidate = self.config.get('crypto_handler') # Check from original passed_config
+        if isinstance(crypto_handler_candidate, CryptoHandler):
+            self.crypto_handler = crypto_handler_candidate
+            logger.info(f"Using provided CryptoHandler instance from passed_config.")
         else:
-            # MT5Handler() likely uses its own config loading or defaults if config arg is not supported/used.
-            # If MT5Handler could take self.mt5_config, it would be MT5Handler(config=self.mt5_config)
-            self.mt5_handler = MT5Handler() 
-            logger.info(f"Created new MT5Handler instance (default initialization).")
-        # Verify MT5 connection is working
-        if self.mt5_handler is not None and not getattr(self.mt5_handler, 'connected', False):
-            self.mt5_handler.initialize()
-        self.mt5_connected = self.mt5_handler.connected
+            # CryptoHandler() likely uses its own config loading or defaults if config arg is not supported/used.
+            # If CryptoHandler could take self.crypto_config, it would be CryptoHandler(config=self.crypto_config)
+            self.crypto_handler = CryptoHandler() 
+            logger.info(f"Created new CryptoHandler instance (default initialization).")
+        # Verify Crypto connection is working
+        if self.crypto_handler is not None and not getattr(self.crypto_handler, 'connected', False):
+            self.crypto_handler.initialize()
+        self.crypto_connected = self.crypto_handler.connected
         # Initialize symbols list and state tracking variables
         self.symbols = []
         # Load symbols from configuration
         self._load_symbols_from_config()
         
         # Initialize risk manager
-        self.risk_manager = RiskManager(
-            mt5_handler=self.mt5_handler
+        self.risk_manager = CryptoRiskManager(
+            crypto_handler=self.crypto_handler
         )
         
         # Initialize data manager
-        self.data_manager = DataManager(
-            mt5_handler=self.mt5_handler
+        self.data_manager = CryptoDataManager(
+            crypto_handler=self.crypto_handler
         )
         
         # --- NEW: Perform historical data sync on startup ---
@@ -173,19 +173,19 @@ class TradingBot:
         self.telegram_bot = TelegramBot.get_instance()
         
         # Initialize telegram command handler
-        self.telegram_command_handler = TelegramCommandHandler(self, self.mt5_handler)
+        self.telegram_command_handler = TelegramCommandHandler(self, self.crypto_handler)
         
         # Initialize position manager
-        self.position_manager = PositionManager(
-            mt5_handler=self.mt5_handler,
+        self.position_manager = CryptoPositionManager(
+            crypto_handler=self.crypto_handler,
             risk_manager=self.risk_manager,
             telegram_bot=self.telegram_bot,
             config=self.config
         )
         
         # Initialize signal processor
-        self.signal_processor = SignalProcessor(
-            mt5_handler=self.mt5_handler,
+        self.signal_processor = CryptoSignalProcessor(
+            crypto_handler=self.crypto_handler,
             risk_manager=self.risk_manager,
             telegram_bot=self.telegram_bot,
             config=self.config

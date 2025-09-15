@@ -7,7 +7,6 @@ import hashlib
 
 from src.risk_manager import RiskManager
 from src.telegram.telegram_bot import TelegramBot
-from src.mt5_handler import MT5Handler
 from src.utils.position_manager import PositionManager
 
 class SignalProcessor:
