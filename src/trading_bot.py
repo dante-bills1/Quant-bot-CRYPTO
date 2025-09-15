@@ -123,7 +123,10 @@ class TradingBot:
 
         # self.config stores the original passed_config for direct access to other potential top-level keys like 'mt5_handler'
         self.config = passed_config
-        
+
+        # Initialize magic number for backward compatibility (crypto exchanges don't use this, but keeping for MT5-style identification)
+        self.magic_number = self.trading_config.get('magic_number', 1235)
+
         # Initialize market status tracking
         self.market_status = {}  # Track market open/closed status for each symbol
         
@@ -137,9 +140,7 @@ class TradingBot:
             # If CryptoHandler could take self.crypto_config, it would be CryptoHandler(config=self.crypto_config)
             self.crypto_handler = CryptoHandler() 
             logger.info(f"Created new CryptoHandler instance (default initialization).")
-        # Verify Crypto connection is working
-        if self.crypto_handler is not None and not getattr(self.crypto_handler, 'connected', False):
-            self.crypto_handler.initialize()
+        # Crypto connection will be verified in the async initialize() method
         self.crypto_connected = self.crypto_handler.connected
         # Initialize symbols list and state tracking variables
         self.symbols = []
@@ -155,9 +156,6 @@ class TradingBot:
         self.data_manager = CryptoDataManager(
             crypto_handler=self.crypto_handler
         )
-        
-        # --- NEW: Perform historical data sync on startup ---
-        self.data_manager.synchronize_historical_trades()
 
         # Apply enhanced data management settings if available
         data_management_config = self.trading_config.get("data_management", {})
@@ -434,9 +432,10 @@ class TradingBot:
             for sg in self.signal_generators:
                 logger.debug(f"Executing signal generator '{sg.name}' for {symbol}...")
                 try:
+                    balance = await self.risk_manager.get_account_balance()
                     signals = await sg.generate_signals(
                         market_data={symbol: market_data_for_symbol},
-                        balance=self.risk_manager.get_account_balance()
+                        balance=balance
                     )
                     if signals:
                         all_signals.extend(signals)
@@ -467,7 +466,7 @@ class TradingBot:
         try:
             for timeframe in required_timeframes:
                 lookback = self.data_manager.requirements.get((symbol, timeframe), 100)
-                self.data_manager.update_data(symbol, timeframe, force=True, num_candles=lookback)
+                await self.data_manager.update_data(symbol, timeframe, force=True, num_candles=lookback)
 
             market_data_for_symbol = {}
             for timeframe in required_timeframes:
@@ -657,9 +656,12 @@ class TradingBot:
                 exec_mode=self.trading_config.get("execution_mode", "bar")
             )
             
-            # Send notification directly through signal processor instead of using the wrapper method
-            if self.signal_processor:
-                await self.signal_processor.notify_trade_action(startup_message)
+            # Send startup notification through telegram bot
+            if self.telegram_bot and hasattr(self.telegram_bot, 'send_notification'):
+                try:
+                    await self.telegram_bot.send_notification(startup_message)
+                except Exception as e:
+                    logger.error(f"Failed to send startup notification: {e}")
             self.startup_notification_sent = True
             
             # Add log to confirm config order and which strategy will be used as primary
@@ -741,26 +743,8 @@ class TradingBot:
             
         # Register commands with the command handler
         try:
-            # Main commands
-            self.telegram_command_handler.register_command("status", self.handle_status_command)
-            self.telegram_command_handler.register_command("shutdown", self.handle_shutdown_command)
-            self.telegram_command_handler.register_command("enable_trading", self.handle_enable_trading_command)
-            self.telegram_command_handler.register_command("disable_trading", self.handle_disable_trading_command)
-            
-            # Risk management commands
-            self.telegram_command_handler.register_command("enable_close_on_shutdown", self.handle_enable_close_on_shutdown_command)
-            self.telegram_command_handler.register_command("disable_close_on_shutdown", self.handle_disable_close_on_shutdown_command)
-            self.telegram_command_handler.register_command("enable_position_additions", self.handle_enable_position_additions_command)
-            self.telegram_command_handler.register_command("disable_position_additions", self.handle_disable_position_additions_command)
-            self.telegram_command_handler.register_command("enable_trailing_stop", self.handle_enable_trailing_stop_command)
-            self.telegram_command_handler.register_command("disable_trailing_stop", self.handle_disable_trailing_stop_command)
-            
-            # Signal generator commands
-            self.telegram_command_handler.register_command("list_signal_generators", self.handle_list_signal_generators_command)
-            self.telegram_command_handler.register_command("set_signal_generator", self.handle_set_signal_generator_command)
-                        
-            # Use the telegram command handler to register all commands with the bot
-            await self.telegram_command_handler.register_all_commands(self.telegram_bot)
+            # Register all commands with the telegram bot
+            await self.telegram_command_handler.register_commands()
             logger.info("Successfully registered all command handlers")
         except Exception as e:
             logger.error(f"Error registering telegram commands: {str(e)}")
@@ -842,7 +826,7 @@ class TradingBot:
         account_info = await self.crypto_handler.get_account_info() if self.crypto_handler is not None else {}
         
         # Get open positions
-        positions = await self.crypto_handler.get_open_positions(self.magic_number) if self.crypto_handler is not None else []
+        positions = await self.crypto_handler.get_open_positions() if self.crypto_handler is not None else []
         
         # Build status message
         status = f"🤖 Trading Bot Status\n{'='*20}\n"
@@ -872,7 +856,7 @@ class TradingBot:
             for pos in positions[:5]:
                 pos_type = pos.get("side", "BUY").upper()
                 if self.crypto_handler is not None:
-                    result = await self.crypto_handler.close_position(pos["id"], self.magic_number)
+                    result = await self.crypto_handler.close_position(pos["id"])
                     logger.info(f"Position {pos['id']} close result: {result}")
                 else:
                     logger.error("Crypto handler is not initialized, cannot close position.")
@@ -890,7 +874,7 @@ class TradingBot:
         while self.running and not self.shutdown_requested:
             try:
                 # Check for active positions first
-                active_positions = await self.crypto_handler.get_open_positions(self.magic_number) if self.crypto_handler is not None else []
+                active_positions = await self.crypto_handler.get_open_positions() if self.crypto_handler is not None else []
                 
                 if not active_positions:
                     # No open positions, no need to check market status or manage trades
@@ -1323,13 +1307,13 @@ class TradingBot:
                 logger.info("Closing all positions before shutdown")
                 try:
                     # Get a list of positions to close
-                    positions = await self.crypto_handler.get_open_positions(self.magic_number) if self.crypto_handler is not None else []
+                    positions = await self.crypto_handler.get_open_positions() if self.crypto_handler is not None else []
                     
                     if positions:
                         logger.info(f"Found {len(positions)} positions to close")
                         for pos in positions:
                             if self.crypto_handler is not None:
-                                result = await self.crypto_handler.close_position(pos["id"], self.magic_number)
+                                result = await self.crypto_handler.close_position(pos["id"])
                                 logger.info(f"Position {pos['id']} close result: {result}")
                             else:
                                 logger.error("Crypto handler is not initialized, cannot close position.")
@@ -1385,7 +1369,17 @@ class TradingBot:
                     logger.error(f"Failed to start Telegram bot: {str(e)}")
                     logger.error(traceback.format_exc())
                     # Continue with initialization even if Telegram fails
-            
+
+            # Initialize data manager (creates database connection)
+            data_initialized = await self.data_manager.initialize()
+            if not data_initialized:
+                logger.error("Failed to initialize data manager")
+                return False
+            logger.info("Data manager initialized successfully")
+
+            # Perform historical data sync on startup
+            await self.data_manager.synchronize_historical_trades()
+
             # Create other components that depend on CryptoHandler
             # Initialize risk manager
             self.risk_manager = CryptoRiskManager(

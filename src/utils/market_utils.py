@@ -1,8 +1,6 @@
-from typing import Dict, Optional, Any, List, Tuple
+from typing import Any
 from loguru import logger
 import traceback
-import pandas as pd
-import numpy as np
 
 def calculate_tick_value(symbol: str, symbol_info: Any = None, crypto_handler=None) -> float:
     """
@@ -67,32 +65,16 @@ def calculate_tick_value(symbol: str, symbol_info: Any = None, crypto_handler=No
         logger.error(traceback.format_exc())
         return 0.01  # Return default value in case of error
     
-def convert_ticks_to_price(ticks: float, symbol: str, symbol_info: Any = None, crypto_handler=None) -> float:
-    """
-    Convert ticks to price value for a crypto symbol.
-    
-    Args:
-        ticks: Number of ticks
-        symbol: The trading symbol
-        symbol_info: Exchange symbol_info object (optional)
-        crypto_handler: CryptoHandler instance (optional, used if symbol_info is not provided)
-        
-    Returns:
-        float: The price equivalent of the given ticks
-    """
-    tick_value = calculate_tick_value(symbol, symbol_info, crypto_handler)
-    return ticks * tick_value
-
 def convert_price_to_ticks(price_diff: float, symbol: str, symbol_info: Any = None, crypto_handler=None) -> float:
     """
     Convert price difference to ticks for a crypto symbol.
-    
+
     Args:
         price_diff: Price difference
         symbol: The trading symbol
         symbol_info: Exchange symbol_info object (optional)
         crypto_handler: CryptoHandler instance (optional, used if symbol_info is not provided)
-        
+
     Returns:
         float: The tick equivalent of the given price difference
     """
@@ -100,66 +82,3 @@ def convert_price_to_ticks(price_diff: float, symbol: str, symbol_info: Any = No
     if tick_value == 0:
         return 0  # Avoid division by zero
     return price_diff / tick_value 
-
-def adjust_trade_for_spread(
-    symbol: str,
-    order_type: str,
-    entry_price: float,
-    stop_loss: float,
-    take_profit: float,
-    crypto_handler: Any  # CryptoHandler instance
-) -> Tuple[float, float, float, float]:
-    """
-    Adjusts SL/TP based on the current spread to maintain intended risk/reward.
-
-    Args:
-        symbol (str): The trading symbol.
-        order_type (str): 'BUY' or 'SELL'.
-        entry_price (float): The signal's entry price.
-        stop_loss (float): The signal's stop loss.
-        take_profit (float): The signal's take profit.
-        crypto_handler (Any): An instance of the CryptoHandler.
-
-    Returns:
-        Tuple[float, float, float, float]: A tuple containing the actual_entry_price, 
-                                           adjusted_stop_loss, and adjusted_take_profit, spread.
-    """
-    try:
-        tick_info = crypto_handler.get_last_tick(symbol)
-        if not tick_info:
-            logger.error(f"Could not retrieve tick info for {symbol} to adjust for spread.")
-            return entry_price, stop_loss, take_profit, 0.0
-
-        spread = tick_info['ask'] - tick_info['bid']
-        
-        if order_type.upper() == 'BUY':
-            actual_entry_price = tick_info['ask']
-            risk_ticks = entry_price - stop_loss
-            reward_ticks = take_profit - entry_price
-            
-            new_stop_loss = actual_entry_price - risk_ticks
-            new_take_profit = actual_entry_price + reward_ticks
-            
-        elif order_type.upper() == 'SELL':
-            actual_entry_price = tick_info['bid']
-            risk_ticks = stop_loss - entry_price
-            reward_ticks = entry_price - take_profit
-
-            new_stop_loss = actual_entry_price + risk_ticks
-            new_take_profit = actual_entry_price - reward_ticks
-        else:
-            logger.warning(f"Unknown order type '{order_type}' for spread adjustment.")
-            return entry_price, stop_loss, take_profit, 0.0
-
-        logger.info(f"Spread Adjustment for {symbol} {order_type}:")
-        logger.info(f"  - Original Signal: Entry={entry_price}, SL={stop_loss}, TP={take_profit}")
-        logger.info(f"  - Market Prices: Bid={tick_info['bid']}, Ask={tick_info['ask']}, Spread={spread:.5f}")
-        logger.info(f"  - Actual Entry: {actual_entry_price}")
-        logger.info(f"  - Adjusted Trade: SL={new_stop_loss}, TP={new_take_profit}")
-
-        return actual_entry_price, new_stop_loss, new_take_profit, spread
-
-    except Exception as e:
-        logger.error(f"Error adjusting trade for spread for {symbol}: {e}")
-        logger.error(traceback.format_exc())
-        return entry_price, stop_loss, take_profit, 0.0 

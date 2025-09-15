@@ -11,7 +11,6 @@ __all__ = [
     "logging_setup",
     "performance_tracker",
     "market_utils",
-    "SmartMoneyConcepts",
 ]
 
 # Import only what doesn't cause circular imports

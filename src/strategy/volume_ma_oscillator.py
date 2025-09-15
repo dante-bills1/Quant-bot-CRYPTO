@@ -89,10 +89,13 @@ class VolumeMAOscillator(SignalGenerator):
             if hasattr(self.params, key):
                 setattr(self.params, key, value)
         
+        # Load timeframe-specific configuration
+        self._load_timeframe_profile()
+
         # State tracking
         self.last_signal_time = None
         self.position_state = None
-        
+
         logger.info(f"Initialized {self.name} v{self.version} for {primary_timeframe}")
     
     def _load_timeframe_profile(self):

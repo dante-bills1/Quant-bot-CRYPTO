@@ -33,7 +33,19 @@ class CryptoDataManager:
         self.timeframe_registry: Dict[str, Dict[str, int]] = {}
         self.db_path = "crypto_trading_data.db"
         self._price_callbacks: Dict[str, List[Callable]] = {}
-        
+
+    @property
+    def requirements(self):
+        """Provide compatibility with old DataManager interface."""
+        # Convert timeframe_registry to the format expected by trading_bot.py
+        # From: {symbol: {timeframe: lookback}}
+        # To: {(symbol, timeframe): lookback}
+        reqs = {}
+        for symbol, timeframes in self.timeframe_registry.items():
+            for timeframe, lookback in timeframes.items():
+                reqs[(symbol, timeframe)] = lookback
+        return reqs
+
     async def initialize(self) -> bool:
         """Initialize the data manager."""
         try:

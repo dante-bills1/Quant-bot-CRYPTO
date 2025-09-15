@@ -63,12 +63,12 @@ class CryptoTelegramCommandHandler:
 
         logger.info("CryptoTelegramCommandHandler initialized")
 
-    def register_commands(self):
+    async def register_commands(self):
         """Register all commands with the telegram bot."""
         try:
             for command_name, command_func in self.commands.items():
                 # Register command with telegram bot
-                self.telegram_bot.register_command(command_name, command_func)
+                await self.telegram_bot.register_command_handler(command_name, command_func)
                 logger.debug(f"Registered command: /{command_name}")
         except Exception as e:
             logger.error(f"Error registering commands: {str(e)}")
