@@ -244,7 +244,11 @@ class CryptoDataManager:
                 logger.warning(f"No data received for {symbol} {timeframe}")
                 
         except Exception as e:
-            logger.error(f"Failed to update data for {symbol} {timeframe}: {e}")
+            error_msg = str(e).lower()
+            if "does not have market symbol" in error_msg or "symbol" in error_msg and ("not found" in error_msg or "not available" in error_msg):
+                logger.warning(f"Symbol {symbol} not supported by {self.crypto_handler.exchange_name} exchange, skipping")
+            else:
+                logger.error(f"Failed to update data for {symbol} {timeframe}: {e}")
     
     async def get_market_data_for_symbol(self, symbol: str, timeframes: list) -> dict:
         """Get market data for a symbol across multiple timeframes."""

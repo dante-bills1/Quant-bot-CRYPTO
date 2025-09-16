@@ -136,10 +136,19 @@ class TradingBot:
             self.crypto_handler = crypto_handler_candidate
             logger.info(f"Using provided CryptoHandler instance from passed_config.")
         else:
-            # CryptoHandler() likely uses its own config loading or defaults if config arg is not supported/used.
-            # If CryptoHandler could take self.crypto_config, it would be CryptoHandler(config=self.crypto_config)
-            self.crypto_handler = CryptoHandler() 
-            logger.info(f"Created new CryptoHandler instance (default initialization).")
+            # Initialize CryptoHandler with crypto configuration
+            exchange_name = self.crypto_config.get("exchange", "bybit")
+            api_key = self.crypto_config.get("api_key", "")
+            api_secret = self.crypto_config.get("api_secret", "")
+            sandbox = self.crypto_config.get("sandbox", True)
+
+            self.crypto_handler = CryptoHandler(
+                exchange_name=exchange_name,
+                api_key=api_key,
+                api_secret=api_secret,
+                sandbox=sandbox
+            )
+            logger.info(f"Created new CryptoHandler instance with config: exchange={exchange_name}, sandbox={sandbox}")
         # Crypto connection will be verified in the async initialize() method
         self.crypto_connected = self.crypto_handler.connected
         # Initialize symbols list and state tracking variables

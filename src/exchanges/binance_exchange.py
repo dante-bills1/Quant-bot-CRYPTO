@@ -129,13 +129,13 @@ class BinanceExchange(CryptoExchange):
             
             return Ticker(
                 symbol=symbol,
-                bid=float(ticker.get("bid", 0)),
-                ask=float(ticker.get("ask", 0)),
-                last=float(ticker.get("last", 0)),
-                high=float(ticker.get("high", 0)),
-                low=float(ticker.get("low", 0)),
-                volume=float(ticker.get("baseVolume", 0)),
-                timestamp=int(ticker.get("timestamp", time.time() * 1000))
+                bid=float(ticker.get("bid") or 0),
+                ask=float(ticker.get("ask") or 0),
+                last=float(ticker.get("last") or 0),
+                high=float(ticker.get("high") or 0),
+                low=float(ticker.get("low") or 0),
+                volume=float(ticker.get("baseVolume") or 0),
+                timestamp=int(ticker.get("timestamp") or (time.time() * 1000))
             )
             
         except Exception as e:

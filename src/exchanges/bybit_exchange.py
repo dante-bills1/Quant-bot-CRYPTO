@@ -130,13 +130,13 @@ class BybitExchange(CryptoExchange):
             
             return Ticker(
                 symbol=symbol,
-                bid=float(ticker.get("bid", 0)),
-                ask=float(ticker.get("ask", 0)),
-                last=float(ticker.get("last", 0)),
-                high=float(ticker.get("high", 0)),
-                low=float(ticker.get("low", 0)),
-                volume=float(ticker.get("baseVolume", 0)),
-                timestamp=int(ticker.get("timestamp", time.time() * 1000))
+                bid=float(ticker.get("bid") or 0),
+                ask=float(ticker.get("ask") or 0),
+                last=float(ticker.get("last") or 0),
+                high=float(ticker.get("high") or 0),
+                low=float(ticker.get("low") or 0),
+                volume=float(ticker.get("baseVolume") or 0),
+                timestamp=int(ticker.get("timestamp") or (time.time() * 1000))
             )
             
         except Exception as e:
@@ -310,18 +310,23 @@ class BybitExchange(CryptoExchange):
             
             result = []
             for pos in positions:
-                size = float(pos.get("contracts", 0))
+                # Handle None values properly
+                contracts = pos.get("contracts")
+                if contracts is None:
+                    contracts = 0
+
+                size = float(contracts)
                 if abs(size) > 0:  # Only include positions with size > 0
                     result.append(Position(
                         symbol=pos.get("symbol", ""),
                         side="long" if size > 0 else "short",
                         size=abs(size),
-                        entry_price=float(pos.get("entryPrice", 0)),
-                        mark_price=float(pos.get("markPrice", 0)),
-                        unrealized_pnl=float(pos.get("unrealizedPnl", 0)),
-                        realized_pnl=float(pos.get("realizedPnl", 0)),
-                        margin=float(pos.get("initialMargin", 0)),
-                        leverage=float(pos.get("leverage", 1)),
+                        entry_price=float(pos.get("entryPrice") or 0),
+                        mark_price=float(pos.get("markPrice") or 0),
+                        unrealized_pnl=float(pos.get("unrealizedPnl") or 0),
+                        realized_pnl=float(pos.get("realizedPnl") or 0),
+                        margin=float(pos.get("initialMargin") or 0),
+                        leverage=float(pos.get("leverage") or 1),
                         timestamp=int(time.time() * 1000)
                     ))
             
