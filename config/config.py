@@ -131,7 +131,6 @@ TRADE_EXIT_CONFIG = {
         # --- Instrument Category Rules (processed in order, first match wins) ---
         'instrument_category_rules': [
             # Specific Symbols (highest priority)
-            {'symbol_is': 'XAUUSD', 'category': 'metals_gold'},
             {'symbol_is': 'BTCUSD', 'category': 'crypto_btc'},
 
             # Crypto Exchange Based (crypto-specific categories)
@@ -146,15 +145,6 @@ TRADE_EXIT_CONFIG = {
             {'symbol_contains': 'LINK', 'category': 'crypto_chainlink'}, # Chainlink related
             {'symbol_contains': 'UNI', 'category': 'crypto_uniswap'}, # Uniswap related
             {'symbol_contains': 'AAVE', 'category': 'crypto_aave'}, # Aave related
-
-            # Fallback Regex/Symbol Name Contains (lower priority)
-            {'symbol_contains': 'EUR', 'category': 'forex_eur_pairs'}, # Example for EUR specific
-            {'symbol_contains': 'VOLATILITY', 'category': 'volatility_indices_fallback'}, # If path fails
-            {'symbol_contains': 'CRASH', 'category': 'crash_boom_indices_fallback'},
-            {'symbol_contains': 'BOOM', 'category': 'crash_boom_indices_fallback'},
-            {'symbol_contains': 'JUMP', 'category': 'jump_indices_fallback'},
-            {'symbol_contains': 'STEP', 'category': 'step_range_indices_fallback'},
-            {'symbol_contains': 'RANGE BREAK', 'category': 'step_range_indices_fallback'},
         ],
 
         # --- Instrument Category Settings ---
@@ -174,49 +164,6 @@ TRADE_EXIT_CONFIG = {
                 'auto_sl_setup': True, # If position opened with no SL, set one automatically
                 'auto_sl_percent': 0.02, # e.g. 2% of entry price
             },
-            'forex_major': {
-                'mode': 'pips',
-                'trail_points': 15.0,
-                'atr_multiplier': 1.8, # Keep for potential mode switch
-                'percent': 0.005,    # Keep for potential mode switch
-                'break_even_pips': 8,
-                'activation_ratio': 0.6,
-            },
-            'forex_minor': {
-                'mode': 'pips',
-                'trail_points': 20.0,
-                'atr_multiplier': 2.0,
-                'percent': 0.007,
-                'break_even_pips': 10,
-            },
-            'forex_exotic': {
-                'mode': 'atr',
-                'trail_points': 30.0,
-                'atr_multiplier': 2.5,
-                'percent': 0.012,
-                'break_even_pips': 15,
-            },
-             'forex_eur_pairs': { # Example of a more specific regex/contains based category
-                'mode': 'pips',
-                'trail_points': 12.0, # Tighter for EUR pairs example
-                'atr_multiplier': 1.5,
-                'break_even_pips': 7,
-            },
-            'metals_gold': { # Specific for XAUUSD
-                'mode': 'atr',
-                'trail_points': 50.0, # Value in price points for XAUUSD
-                'atr_multiplier': 2.0, # ATR multiplier
-                'percent': 0.008,
-                'break_even_pips': 20, # Value in price points
-                'activation_ratio': 0.4,
-            },
-            'metals_other': {
-                'mode': 'atr',
-                'trail_points': 60.0,
-                'atr_multiplier': 2.2,
-                'percent': 0.01,
-                'break_even_pips': 25,
-            },
             'crypto_btc': { # Specific for BTCUSD
                 'mode': 'percent',
                 'trail_points': 100.0, # Basis points if mode was different, here it's just a placeholder
@@ -225,65 +172,77 @@ TRADE_EXIT_CONFIG = {
                 'break_even_pips': 50, # Price points
                 'activation_ratio': 0.3,
             },
-            'crypto_other': {
+            'crypto_stablecoin_pairs': { # USDT, USDC, BUSD pairs
                 'mode': 'percent',
-                'trail_points': 150.0,
-                'atr_multiplier': 3.0,
-                'percent': 0.02, # 2% trailing
-                'break_even_pips': 75,
-            },
-            'volatility_indices': {
-                'mode': 'atr',
-                'trail_points': 80.0, # Price points
-                'atr_multiplier': 2.8,
-                'percent': 0.012,
-                'break_even_pips': 25, # Price points
-            },
-            'volatility_indices_fallback': { # If path fails, use symbol_contains
-                'mode': 'atr',
-                'trail_points': 85.0,
-                'atr_multiplier': 3.0,
-                'break_even_pips': 30,
-            },
-            'crash_boom_indices': {
-                'mode': 'percent', # Often these move fast, percent might be better
-                'trail_points': 150.0,
-                'atr_multiplier': 3.5,
-                'percent': 0.020, # 2%
-                'break_even_pips': 40, # Price points
-            },
-            'crash_boom_indices_fallback': {
-                'mode': 'percent',
-                'trail_points': 160.0,
-                'atr_multiplier': 3.7,
-                'percent': 0.022,
-                'break_even_pips': 45,
-            },
-            'jump_indices': {
-                'mode': 'atr',
-                'trail_points': 60.0,
-                'atr_multiplier': 2.5,
-                'percent': 0.010,
-                'break_even_pips': 20,
-            },
-            'jump_indices_fallback': {
-                'mode': 'atr',
-                'trail_points': 65.0,
-                'atr_multiplier': 2.6,
-                'break_even_pips': 22,
-            },
-            'step_range_indices': {
-                'mode': 'pips', # Or ATR depending on typical movement
-                'trail_points': 40.0,
+                'trail_points': 75.0,
                 'atr_multiplier': 2.0,
-                'percent': 0.008,
-                'break_even_pips': 15,
+                'percent': 0.012, # 1.2% trailing
+                'break_even_pips': 30,
+                'activation_ratio': 0.4,
             },
-            'step_range_indices_fallback': {
-                'mode': 'pips',
-                'trail_points': 45.0,
+            'crypto_bitcoin': { # Bitcoin related pairs
+                'mode': 'percent',
+                'trail_points': 80.0,
                 'atr_multiplier': 2.2,
-                'break_even_pips': 18,
+                'percent': 0.014, # 1.4% trailing
+                'break_even_pips': 40,
+                'activation_ratio': 0.35,
+            },
+            'crypto_ethereum': { # Ethereum related pairs
+                'mode': 'percent',
+                'trail_points': 70.0,
+                'atr_multiplier': 2.1,
+                'percent': 0.013, # 1.3% trailing
+                'break_even_pips': 35,
+                'activation_ratio': 0.4,
+            },
+            'crypto_solana': { # Solana related pairs
+                'mode': 'percent',
+                'trail_points': 90.0,
+                'atr_multiplier': 2.3,
+                'percent': 0.016, # 1.6% trailing
+                'break_even_pips': 45,
+                'activation_ratio': 0.3,
+            },
+            'crypto_cardano': { # Cardano related pairs
+                'mode': 'percent',
+                'trail_points': 65.0,
+                'atr_multiplier': 2.0,
+                'percent': 0.012, # 1.2% trailing
+                'break_even_pips': 25,
+                'activation_ratio': 0.45,
+            },
+            'crypto_polkadot': { # Polkadot related pairs
+                'mode': 'percent',
+                'trail_points': 85.0,
+                'atr_multiplier': 2.2,
+                'percent': 0.015, # 1.5% trailing
+                'break_even_pips': 40,
+                'activation_ratio': 0.35,
+            },
+            'crypto_chainlink': { # Chainlink related pairs
+                'mode': 'percent',
+                'trail_points': 75.0,
+                'atr_multiplier': 2.1,
+                'percent': 0.014, # 1.4% trailing
+                'break_even_pips': 35,
+                'activation_ratio': 0.4,
+            },
+            'crypto_uniswap': { # Uniswap related pairs
+                'mode': 'percent',
+                'trail_points': 70.0,
+                'atr_multiplier': 2.0,
+                'percent': 0.013, # 1.3% trailing
+                'break_even_pips': 30,
+                'activation_ratio': 0.4,
+            },
+            'crypto_aave': { # Aave related pairs
+                'mode': 'percent',
+                'trail_points': 80.0,
+                'atr_multiplier': 2.1,
+                'percent': 0.015, # 1.5% trailing
+                'break_even_pips': 40,
+                'activation_ratio': 0.35,
             }
             # Add other categories as needed
         }
