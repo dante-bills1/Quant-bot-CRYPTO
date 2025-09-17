@@ -13,7 +13,7 @@ import numpy as np
 from backtesting import Strategy
 from loguru import logger
 
-from src.crypto_backtesting.data_fetcher import CryptoDataFetcher
+from .data_fetcher import CryptoDataFetcher
 
 
 class CryptoBacktestStrategy(Strategy, ABC):
@@ -372,5 +372,4 @@ def register_strategy(name: str):
     def decorator(strategy_class):
         strategy_registry.register_strategy(name, strategy_class)
         return strategy_class
-    return decorator</content>
-</xai:function_call">Now I need to create the VWAP Swing strategy implementation. This will be based on the reference file's DynamicSwingVWAPStrategy_ADX class.
+    return decorator

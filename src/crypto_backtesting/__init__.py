@@ -43,5 +43,4 @@ __all__ = [
 
     # Registry
     "strategy_registry"
-]</content>
-</xai:function_call">Now let me update the TODO list to reflect the completed work.
+]

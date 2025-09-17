@@ -646,5 +646,4 @@ class EnhancedMetricsCalculator:
 
         except Exception as e:
             logger.error(f"Error generating report: {str(e)}")
-            return f"Error generating report: {str(e)}"</content>
-</xai:function_call">Now I need to create a main execution script that ties everything together, similar to the reference file's main() function.
+            return f"Error generating report: {str(e)}"

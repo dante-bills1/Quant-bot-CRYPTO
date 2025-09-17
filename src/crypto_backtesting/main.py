@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from loguru import logger
 
@@ -259,7 +259,11 @@ async def demonstrate_framework():
 
         result1 = await run_single_backtest("BTCUSDT", "4h")
         if "error" not in result1:
-            logger.info("✅ Single backtest completed successfully"            logger.info(".2f"            logger.info(".2f"            logger.info(".1f"        else:
+            logger.info("✅ Single backtest completed successfully")
+            logger.info(f"📊 Return: {result1['enhanced_metrics']['Return']:.2f}%")
+            logger.info(f"📈 Sharpe: {result1['enhanced_metrics']['Sharpe']:.2f}")
+            logger.info(f"📊 Trades: {result1['enhanced_metrics']['Trades']}")
+        else:
             logger.error(f"❌ Single backtest failed: {result1['error']}")
 
         # Example 2: Single backtest with custom parameters
@@ -282,7 +286,9 @@ async def demonstrate_framework():
         )
 
         if "error" not in result2:
-            logger.info("✅ Custom parameter backtest completed"            logger.info(".2f"        else:
+            logger.info("✅ Custom parameter backtest completed")
+            logger.info(f"📊 Custom Return: {result2['enhanced_metrics']['Return']:.2f}%")
+        else:
             logger.error(f"❌ Custom parameter backtest failed: {result2['error']}")
 
         # Example 3: Bayesian optimization
@@ -297,7 +303,9 @@ async def demonstrate_framework():
         )
 
         if "error" not in opt_result:
-            logger.info("✅ Bayesian optimization completed"            logger.info(".2f"            logger.info(f"Best parameters: swing_period={opt_result['best_params']['swing_period']}, "
+            logger.info("✅ Bayesian optimization completed")
+            logger.info(f"📊 Best Return: {opt_result['best_return']:.2f}%")
+            logger.info(f"Best parameters: swing_period={opt_result['best_params']['swing_period']}, "
                          f"adx_threshold={opt_result['best_params']['adx_threshold']}")
         else:
             logger.error(f"❌ Bayesian optimization failed: {opt_result['error']}")
@@ -364,5 +372,4 @@ if __name__ == "__main__":
     )
 
     # Run main function
-    asyncio.run(main())</content>
-</xai:function_call">Finally, let me create an __init__.py file to make the package properly importable and update the TODO list.
+    asyncio.run(main())

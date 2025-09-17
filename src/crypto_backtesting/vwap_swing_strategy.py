@@ -377,5 +377,4 @@ class VWAPSwingADXStrategy(CryptoBacktestStrategy):
                 'position_size_pct': self.position_size_pct,
             }
         })
-        return base_info</content>
-</xai:function_call">Now I need to create the Bayesian optimization module to handle parameter optimization for the strategies.
+        return base_info
