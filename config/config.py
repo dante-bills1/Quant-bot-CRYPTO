@@ -31,14 +31,14 @@ TRADING_CONFIG = {
         "DOT/USDT:USDT",
         "XRP/USDT:USDT",
         "DOGE/USDT:USDT",
-        "AVAX/USDT",
         "POL/USDT:USDT",
         "LINK/USDT:USDT",
     ],
-    "fixed_lot_size": 1.0,
-    "use_fixed_lot_size": False,
-    "max_lot_size": 1.0,
     "max_daily_risk": 0.06,
+    "risk_per_trade": 0.02,  # 2% risk per trade
+    "min_position_size": 10.0,  # Minimum position size in USD
+    "max_position_size": 1000.0,  # Maximum position size in USD
+    "default_leverage": 5,  # Default leverage for positions
     "spread_factor": 1.5,
     "allow_position_additions": False,
     "position_addition_threshold": 0.5,
@@ -102,9 +102,10 @@ RISK_MANAGER_CONFIG = {
     'max_daily_loss': 0.015,
     'min_risk_reward': 0.5,
     'max_concurrent_trades': 1000,
-    'use_fixed_lot_size': TRADING_CONFIG['use_fixed_lot_size'],
-    'fixed_lot_size': TRADING_CONFIG['fixed_lot_size'],
-    'max_lot_size': TRADING_CONFIG['max_lot_size'],
+    'risk_per_trade': TRADING_CONFIG['risk_per_trade'],
+    'min_position_size': TRADING_CONFIG['min_position_size'],
+    'max_position_size': TRADING_CONFIG['max_position_size'],
+    'default_leverage': TRADING_CONFIG['default_leverage'],
 }
 
 # ================= Trade Exit Configuration =================

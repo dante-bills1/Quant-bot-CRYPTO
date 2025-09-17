@@ -431,22 +431,112 @@ class BybitExchange(CryptoExchange):
     async def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
         """Get symbol information."""
         try:
-            market = self.exchange.market(symbol)
-            return {
-                "symbol": symbol,
-                "base": market.get("base", ""),
-                "quote": market.get("quote", ""),
-                "min_amount": float(market.get("limits", {}).get("amount", {}).get("min", 0)),
-                "max_amount": float(market.get("limits", {}).get("amount", {}).get("max", 0)),
-                "amount_precision": market.get("precision", {}).get("amount", 0),
-                "price_precision": market.get("precision", {}).get("price", 0),
-                "min_cost": float(market.get("limits", {}).get("cost", {}).get("min", 0)),
-                "active": market.get("active", False)
-            }
-            
+            # Check if exchange is initialized
+            if not self.exchange:
+                logger.error(f"Exchange not initialized for {symbol}")
+                return {}
+
+            # Get market information from CCXT
+            if hasattr(self.exchange, 'market') and symbol in self.exchange.markets:
+                market = self.exchange.market(symbol)
+
+                # Safely extract nested values with proper None handling
+                limits = market.get("limits") or {}
+                amount_limits = limits.get("amount") or {}
+                cost_limits = limits.get("cost") or {}
+                precision = market.get("precision") or {}
+
+                # Ensure all numeric values are properly handled
+                try:
+                    min_amount = amount_limits.get("min")
+                    if min_amount is None:
+                        min_amount = 0.001
+                    min_amount = float(min_amount)
+
+                    max_amount = amount_limits.get("max")
+                    if max_amount is None:
+                        max_amount = 0
+                    max_amount = float(max_amount)
+
+                    min_cost = cost_limits.get("min")
+                    if min_cost is None:
+                        min_cost = 0
+                    min_cost = float(min_cost)
+
+                    amount_precision = precision.get("amount")
+                    if amount_precision is None:
+                        amount_precision = 8
+                    amount_precision = int(amount_precision)
+
+                    price_precision = precision.get("price")
+                    if price_precision is None:
+                        price_precision = 4
+                    price_precision = int(price_precision)
+
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Error parsing numeric values for {symbol}, using defaults: {e}")
+                    min_amount = 0.001
+                    max_amount = 0
+                    min_cost = 0
+                    amount_precision = 8
+                    price_precision = 4
+
+                return {
+                    "symbol": symbol,
+                    "base": market.get("base", ""),
+                    "quote": market.get("quote", ""),
+                    "min_amount": min_amount,
+                    "max_amount": max_amount,
+                    "amount_precision": amount_precision,
+                    "price_precision": price_precision,
+                    "min_cost": min_cost,
+                    "active": market.get("active", True)
+                }
+            else:
+                # Fallback: return default values if market not found
+                logger.warning(f"Market {symbol} not found in exchange markets, using defaults")
+
+                # Safe symbol parsing
+                try:
+                    base = symbol.split('/')[0] if '/' in symbol and len(symbol.split('/')) > 0 else ""
+                    quote = symbol.split('/')[1] if '/' in symbol and len(symbol.split('/')) > 1 else ""
+                except Exception:
+                    base = ""
+                    quote = ""
+
+                return {
+                    "symbol": symbol,
+                    "base": base,
+                    "quote": quote,
+                    "min_amount": 0.001,
+                    "max_amount": 0,
+                    "amount_precision": 8,
+                    "price_precision": 4,
+                    "min_cost": 0,
+                    "active": True
+                }
+
         except Exception as e:
             logger.error(f"Failed to get symbol info for {symbol}: {e}")
-            return {}
+            # Return safe defaults with proper error handling
+            try:
+                base = symbol.split('/')[0] if '/' in symbol and len(symbol.split('/')) > 0 else ""
+                quote = symbol.split('/')[1] if '/' in symbol and len(symbol.split('/')) > 1 else ""
+            except Exception:
+                base = ""
+                quote = ""
+
+            return {
+                "symbol": symbol,
+                "base": base,
+                "quote": quote,
+                "min_amount": 0.001,
+                "max_amount": 0,
+                "amount_precision": 8,
+                "price_precision": 4,
+                "min_cost": 0,
+                "active": True
+            }
     
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
         """Set leverage for a symbol."""

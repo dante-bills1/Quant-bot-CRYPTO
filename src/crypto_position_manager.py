@@ -57,8 +57,19 @@ class CryptoPositionManager:
         # Position management settings
         self.max_positions = self.config.get('max_positions', 10)
         self.position_timeout = self.config.get('position_timeout', 3600)  # 1 hour timeout
-        
-        logger.info("CryptoPositionManager initialized")
+
+        # Get configured symbols for position filtering
+        self.configured_symbols = set()
+        if 'symbols' in self.config:
+            symbols = self.config['symbols']
+            if isinstance(symbols, list):
+                self.configured_symbols = set(symbols)
+        elif 'trading_symbols' in self.config:
+            symbols = self.config['trading_symbols']
+            if isinstance(symbols, list):
+                self.configured_symbols = set(symbols)
+
+        logger.info(f"CryptoPositionManager initialized with {len(self.configured_symbols)} configured symbols: {list(self.configured_symbols) if self.configured_symbols else 'None'}")
     
     async def get_open_positions(self) -> List[Dict[str, Any]]:
         """
@@ -411,8 +422,24 @@ class CryptoPositionManager:
             closed_count = 0
             
             # Get all open positions
-            positions = await self.get_open_positions()
-            
+            all_positions = await self.get_open_positions()
+
+            # Filter positions to only include configured symbols
+            if self.configured_symbols:
+                positions = [
+                    pos for pos in all_positions
+                    if pos.get('symbol') in self.configured_symbols
+                ]
+                filtered_count = len(all_positions) - len(positions)
+                if filtered_count > 0:
+                    logger.info(f"Filtered out {filtered_count} positions not in configured symbols")
+            else:
+                # If no configured symbols, manage all positions (fallback)
+                positions = all_positions
+                logger.warning("No configured symbols found, managing all positions")
+
+            logger.debug(f"Managing {len(positions)} positions out of {len(all_positions)} total")
+
             for position in positions:
                 symbol = position.get('symbol')
                 if not symbol:

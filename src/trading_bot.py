@@ -183,11 +183,13 @@ class TradingBot:
         self.telegram_command_handler = CryptoTelegramCommandHandler(self, self.crypto_handler)
         
         # Initialize position manager
+        # Merge trading_config with main config to ensure symbols are available
+        position_config = {**self.config, **self.trading_config}
         self.position_manager = CryptoPositionManager(
             crypto_handler=self.crypto_handler,
             risk_manager=self.risk_manager,
             telegram_bot=self.telegram_bot,
-            config=self.config
+            config=position_config
         )
         
         # Initialize signal processor

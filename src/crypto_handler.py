@@ -375,7 +375,7 @@ class CryptoHandler:
                 return None
 
             # Enforce minimum quantity requirements
-            adj_volume, debug = self._enforce_min_qty(volume, current_price, symbol)
+            adj_volume, debug = await self._enforce_min_qty(volume, current_price, symbol)
 
             if adj_volume <= 0:
                 logger.warning(f"[skip] Qty below exchange minimums for {symbol}; order skipped.")
@@ -585,7 +585,7 @@ class CryptoHandler:
         return self.connected and self.exchange is not None
     
     # ---- Market Filters & Quantity Enforcement ----
-    def _market_filters(self, symbol: str) -> Tuple[float, float, float]:
+    async def _market_filters(self, symbol: str) -> Tuple[float, float, float]:
         """
         Get market filters for a symbol.
 
@@ -602,47 +602,30 @@ class CryptoHandler:
         """
         try:
             if not self.connected or not self.exchange:
+                logger.warning(f"Exchange not connected or available for {symbol}")
                 return 0.0, 0.0, 0.0
 
-            market = self.exchange.market(symbol)
-            min_qty = None
-            step = None
-            min_cost = None
+            # Use get_symbol_info method instead of direct market access
+            symbol_info = await self.exchange.get_symbol_info(symbol)
 
-            # CCXT standard limits
-            try:
-                min_qty = ((market.get("limits") or {}).get("amount") or {}).get("min")
-                min_cost = ((market.get("limits") or {}).get("cost") or {}).get("min")
-            except Exception:
-                pass
+            if not symbol_info:
+                logger.warning(f"No symbol info available for {symbol}")
+                return 0.0, 0.0, 0.0
 
-            # Precision as fallback for step
-            try:
-                prec = (market.get("precision") or {}).get("amount")
-                if prec is not None:
-                    step = 10 ** (-int(prec))
-            except Exception:
-                pass
+            # Extract market filters from symbol info
+            min_qty = symbol_info.get("min_amount", 0.0)
+            step = 10 ** (-int(symbol_info.get("amount_precision", 0))) if symbol_info.get("amount_precision", 0) > 0 else 0.001
+            min_cost = symbol_info.get("min_cost", 0.0)
 
-            # Exchange-specific info (Bybit v5 format)
-            info = market.get("info") or {}
-            if self.exchange_name == "bybit":
-                lot = info.get("lotSizeFilter") or {}
-                try:
-                    if lot.get("minOrderQty") is not None:
-                        min_qty = float(lot["minOrderQty"])
-                    if lot.get("qtyStep") is not None:
-                        step = float(lot["qtyStep"])
-                except Exception:
-                    pass
-
-            return float(min_qty or 0.0), float(step or 0.0), float(min_cost or 0.0)
+            logger.debug(f"Market filters for {symbol}: min_qty={min_qty}, step={step}, min_cost={min_cost}")
+            return float(min_qty), float(step), float(min_cost)
 
         except Exception as e:
             logger.error(f"Error getting market filters for {symbol}: {e}")
-            return 0.0, 0.0, 0.0
+            # Return safe defaults
+            return 0.001, 0.001, 0.0
 
-    def _enforce_min_qty(self, desired_qty: float, price: float, symbol: str) -> Tuple[float, Dict[str, float]]:
+    async def _enforce_min_qty(self, desired_qty: float, price: float, symbol: str) -> Tuple[float, Dict[str, float]]:
         """
         Enforce minimum quantity requirements.
 
@@ -660,7 +643,7 @@ class CryptoHandler:
         Returns:
             Tuple of (adjusted_qty, debug_info)
         """
-        min_qty, step, min_cost = self._market_filters(symbol)
+        min_qty, step, min_cost = await self._market_filters(symbol)
 
         debug = {
             "desired": desired_qty,
