@@ -8,8 +8,8 @@ Based on the reference VWAP swing strategy implementation.
 
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, List, Optional, Tuple, Callable
-from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional, Tuple
+from datetime import datetime
 import time
 from pathlib import Path
 import warnings
