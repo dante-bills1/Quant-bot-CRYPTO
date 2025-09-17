@@ -333,46 +333,17 @@ class VolumeMAOscillator(SignalGenerator):
     
     def _calculate_atr(self, df: pd.DataFrame, n: int) -> pd.Series:
         """
-        Calculate Average True Range using enhanced method from reference bot.
+        Calculate Average True Range using centralized method from crypto_risk_manager.
 
-        Based on reference bot's ATR calculation pattern:
-        - Proper true range calculation
-        - Rolling mean with minimum periods
-        - Forward/backward fill for edge cases
-        - Enhanced error handling
+        Delegates to the centralized ATR calculation for consistency and maintainability.
         """
         try:
-            if df is None or df.empty:
-                logger.warning("No data provided for ATR calculation")
-                return pd.Series(dtype=float)
+            # Import risk manager here to avoid circular imports
+            from src.crypto_risk_manager import get_crypto_risk_manager
 
-            required_columns = ['high', 'low', 'close']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
-                logger.error(f"Missing required columns for ATR: {missing_columns}")
-                return pd.Series(dtype=float)
-
-            high = df['high']
-            low = df['low']
-            close = df['close']
-
-            # Calculate True Range
-            tr1 = high - low
-            tr2 = abs(high - close.shift(1))
-            tr3 = abs(low - close.shift(1))
-
-            true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-
-            # Calculate ATR using rolling mean with minimum periods (reference bot pattern)
-            atr = true_range.rolling(window=n, min_periods=n).mean()
-
-            # Handle edge cases with forward/backward fill
-            if not atr.empty:
-                atr = atr.fillna(method='bfill').fillna(method='ffill').fillna(0.0)
-
-            logger.debug(f"Calculated ATR with period {n}: {len(atr)} values")
-            return atr
-
+            risk_manager = get_crypto_risk_manager()
+            return risk_manager.calculate_atr(df, n)
+            
         except Exception as e:
             logger.error(f"Error calculating ATR: {str(e)}")
             return pd.Series(dtype=float)

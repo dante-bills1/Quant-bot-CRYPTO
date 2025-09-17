@@ -15,7 +15,7 @@ import pandas as pd
 from src.crypto_handler import CryptoHandler
 from src.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
-from src.crypto_telegram_command_handler import CryptoTelegramCommandHandler
+from src.telegram.crypto_telegram_command_handler import CryptoTelegramCommandHandler
 from src.crypto_position_manager import CryptoPositionManager
 from src.crypto_signal_processor import CryptoSignalProcessor
 from src.crypto_performance_tracker import CryptoPerformanceTracker

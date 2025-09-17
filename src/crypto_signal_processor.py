@@ -461,7 +461,7 @@ class CryptoSignalProcessor:
             # This would need to be implemented with proper stop loss calculation
             stop_loss = current_price * 0.98  # 2% stop loss for now
             
-            position_size = self.risk_manager.calculate_position_size(
+            position_size = await self.risk_manager.calculate_position_size(
                 symbol=symbol,
                 entry_price=current_price,
                 stop_loss=stop_loss

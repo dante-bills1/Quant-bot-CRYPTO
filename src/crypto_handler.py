@@ -166,28 +166,116 @@ class CryptoHandler:
                 logger.warning(f"No OHLCV data received for {symbol} {timeframe}")
                 return pd.DataFrame()
 
-            # Convert to DataFrame with proper column names
-            df = pd.DataFrame(ohlcv, columns=["timestamp","open","high","low","close","volume"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-            df.set_index("timestamp", inplace=True)
+            # Check if data is already a DataFrame (processed by exchange)
+            if isinstance(ohlcv, pd.DataFrame):
+                df = ohlcv.copy()
+                logger.debug(f"Received processed DataFrame with {len(df)} rows for {symbol} {timeframe}")
+            else:
+                # Handle raw OHLCV data (list format)
+                logger.debug(f"Received raw OHLCV data for {symbol} {timeframe}")
+                df = pd.DataFrame(ohlcv, columns=["timestamp","open","high","low","close","volume"])
+
+                # Validate raw data
+                if df.empty:
+                    logger.warning(f"Empty OHLCV data received for {symbol} {timeframe}")
+                    return pd.DataFrame()
+
+                # Convert timestamp and validate
+                try:
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True, errors='coerce')
+                    # Drop any rows with invalid timestamps
+                    df = df.dropna(subset=['timestamp'])
+                    if df.empty:
+                        logger.warning(f"All timestamps invalid for {symbol} {timeframe}")
+                        return pd.DataFrame()
+
+                    df.set_index("timestamp", inplace=True)
+                except Exception as e:
+                    logger.error(f"Error converting timestamps for {symbol} {timeframe}: {e}")
+                    return pd.DataFrame()
+
+            # Validate and clean OHLCV data
+            try:
+                # Ensure all OHLCV columns exist and are numeric
+                required_cols = ['open', 'high', 'low', 'close', 'volume']
+                for col in required_cols:
+                    if col not in df.columns:
+                        logger.error(f"Missing required column '{col}' for {symbol} {timeframe}")
+                        return pd.DataFrame()
+
+                    # Convert to numeric, coercing errors to NaN
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                # Drop rows with NaN values in essential columns
+                df = df.dropna(subset=['open', 'high', 'low', 'close'])
+
+                # Ensure volume is non-negative
+                if 'volume' in df.columns:
+                    df['volume'] = df['volume'].clip(lower=0)
+
+                if df.empty:
+                    logger.warning(f"All OHLCV data invalid after cleaning for {symbol} {timeframe}")
+                    return pd.DataFrame()
+
+            except Exception as e:
+                logger.error(f"Error validating OHLCV data for {symbol} {timeframe}: {e}")
+                return pd.DataFrame()
 
             # Remove incomplete current bar
             if len(df) >= 2:
-                now = int(time.time() * 1000)
-                tf_ms = self.exchange.parse_timeframe(timeframe) * 1000
-                last_ts = int(df.index[-1].value / 1e6)  # Convert to milliseconds
+                try:
+                    now = int(time.time() * 1000)
+                    tf_ms = self.exchange.parse_timeframe(timeframe) * 1000
 
-                if now - last_ts < tf_ms:
-                    logger.debug(f"Removing incomplete current bar for {symbol} {timeframe}")
-                    df = df.iloc[:-1]  # Remove open bar
+                    # Safely get last timestamp value
+                    last_ts_ns = df.index[-1].value
+                    if last_ts_ns > 0:  # Check for valid timestamp
+                        last_ts = int(last_ts_ns / 1e6)  # Convert to milliseconds
+
+                        if now - last_ts < tf_ms:
+                            logger.debug(f"Removing incomplete current bar for {symbol} {timeframe}")
+                            df = df.iloc[:-1]  # Remove open bar
+                    else:
+                        logger.warning(f"Invalid timestamp value for {symbol} {timeframe}")
+                except (ValueError, OverflowError, AttributeError) as e:
+                    logger.warning(f"Error removing incomplete bar for {symbol} {timeframe}: {e}")
 
             # Reindex to ensure complete timeframe grid
             if not df.empty:
-                start = df.index[0].floor(timeframe)
-                end = df.index[-1].floor(timeframe)
-                grid = pd.date_range(start, end, freq=timeframe, tz="UTC")
-                df = df.reindex(grid).ffill()
-                df["volume"] = df["volume"].fillna(0)
+                try:
+                    # Validate index before reindexing
+                    if df.index.isna().any():
+                        logger.warning(f"Found NaT values in index for {symbol} {timeframe}, skipping reindex")
+                        return df
+
+                    # Map timeframe to pandas frequency
+                    pandas_freq_map = {
+                        '1m': '1min', '3m': '3min', '5m': '5min', '15m': '15min', '30m': '30min',
+                        '1h': '1h', '2h': '2h', '4h': '4h', '6h': '6h', '8h': '8h', '12h': '12h',
+                        '1d': '1D', '3d': '3D', '1w': '1W', '1M': '1M'
+                    }
+                    pandas_freq = pandas_freq_map.get(timeframe, '1h')  # Default to 1 hour
+
+                    start = df.index[0].floor(pandas_freq)
+                    end = df.index[-1].floor(pandas_freq)
+
+                    # Validate start and end are not NaT
+                    if pd.isna(start) or pd.isna(end):
+                        logger.warning(f"Invalid start/end dates for {symbol} {timeframe}, skipping reindex")
+                        return df
+
+                    # Create date range with error handling
+                    try:
+                        grid = pd.date_range(start, end, freq=pandas_freq, tz="UTC")
+                        df = df.reindex(grid).ffill()
+                        df["volume"] = df["volume"].fillna(0)
+                    except ValueError as e:
+                        logger.warning(f"Error creating date range for {symbol} {timeframe}: {e}")
+                        return df
+
+                except Exception as e:
+                    logger.warning(f"Error during reindexing for {symbol} {timeframe}: {e}")
+                    return df
 
             logger.debug(f"Fetched {len(df)} OHLCV candles for {symbol} {timeframe}")
             return df
@@ -464,60 +552,6 @@ class CryptoHandler:
             logger.error(f"Failed to get min stop distance for {symbol}: {e}")
             return 0.001
     
-    # Position Sizing Methods
-    async def calculate_position_size(
-        self, 
-        symbol: str, 
-        price: Optional[float] = None, 
-        risk_amount: Optional[float] = None, 
-        risk_percent: Optional[float] = None, 
-        entry_price: Optional[float] = None, 
-        stop_loss_price: Optional[float] = None
-    ) -> float:
-        """Calculate position size based on risk parameters."""
-        try:
-            if not price and not entry_price:
-                ticker = await self.get_ticker(symbol)
-                if ticker:
-                    price = ticker.last
-                else:
-                    return 0.0
-            
-            current_price = price or entry_price
-            if not current_price or not stop_loss_price:
-                return 0.0
-            
-            # Get account balance
-            balance = await self.get_free_margin()
-            if not balance:
-                return 0.0
-            
-            # Calculate risk amount
-            if risk_percent:
-                risk_amount = balance * (risk_percent / 100.0)
-            
-            if not risk_amount:
-                return 0.0
-            
-            # Calculate position size
-            risk_per_trade = abs(current_price - stop_loss_price)
-            if risk_per_trade == 0:
-                return 0.0
-            
-            position_size = risk_amount / risk_per_trade
-            
-            # Apply symbol limits
-            symbol_info = await self.get_symbol_info(symbol)
-            if symbol_info:
-                min_amount = symbol_info.get("min_amount", 0)
-                max_amount = symbol_info.get("max_amount", float('inf'))
-                position_size = max(min_amount, min(position_size, max_amount))
-            
-            return position_size
-            
-        except Exception as e:
-            logger.error(f"Failed to calculate position size: {e}")
-            return 0.0
     
     # WebSocket Methods
     async def start_websocket(self, symbol: str, callback: Callable) -> bool:
