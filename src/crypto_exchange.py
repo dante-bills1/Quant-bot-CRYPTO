@@ -211,6 +211,36 @@ class CryptoExchange(ABC):
         """Get the name of the exchange."""
         return self.__class__.__name__.replace("Exchange", "").lower()
 
+    def parse_timeframe(self, timeframe: str) -> int:
+        """
+        Parse timeframe string to seconds.
+
+        Args:
+            timeframe: Timeframe string (e.g., '1m', '5m', '1h', '1d')
+
+        Returns:
+            Timeframe in seconds
+        """
+        timeframe_map = {
+            '1m': 60,
+            '3m': 180,
+            '5m': 300,
+            '15m': 900,
+            '30m': 1800,
+            '1h': 3600,
+            '2h': 7200,
+            '4h': 14400,
+            '6h': 21600,
+            '8h': 28800,
+            '12h': 43200,
+            '1d': 86400,
+            '3d': 259200,
+            '1w': 604800,
+            '1M': 2592000
+        }
+
+        return timeframe_map.get(timeframe, 3600)  # Default to 1 hour
+
 
 class ExchangeFactory:
     """Factory for creating exchange instances."""

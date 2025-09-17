@@ -139,8 +139,13 @@ class BinanceExchange(CryptoExchange):
             )
             
         except Exception as e:
-            logger.error(f"Failed to get ticker for {symbol}: {e}")
-            return Ticker(symbol=symbol, bid=0, ask=0, last=0, high=0, low=0, volume=0, timestamp=0)
+            error_msg = str(e).lower()
+            if "network" in error_msg or "connection" in error_msg or "resolve" in error_msg or "timeout" in error_msg:
+                logger.warning(f"Network error getting ticker for {symbol}, exchange may be down")
+                return Ticker(symbol=symbol, bid=0, ask=0, last=0, high=0, low=0, volume=0, timestamp=int(time.time() * 1000))
+            else:
+                logger.error(f"Failed to get ticker for {symbol}: {e}")
+                return Ticker(symbol=symbol, bid=0, ask=0, last=0, high=0, low=0, volume=0, timestamp=0)
     
     async def get_historical_data(
         self, 
@@ -166,8 +171,13 @@ class BinanceExchange(CryptoExchange):
             return df
             
         except Exception as e:
-            logger.error(f"Failed to get historical data for {symbol}: {e}")
-            return pd.DataFrame()
+            error_msg = str(e).lower()
+            if "network" in error_msg or "connection" in error_msg or "resolve" in error_msg or "timeout" in error_msg:
+                logger.warning(f"Network error getting historical data for {symbol}, exchange may be down")
+                return None
+            else:
+                logger.error(f"Failed to get historical data for {symbol}: {e}")
+                return None
     
     async def place_order(
         self,
@@ -181,14 +191,32 @@ class BinanceExchange(CryptoExchange):
     ) -> Order:
         """Place a new order."""
         try:
+            # Validate and adjust order amount to meet minimum requirements
+            try:
+                market = self.exchange.market(symbol)
+                min_amount = market.get("limits", {}).get("amount", {}).get("min", 0.001)
+                amount_precision = market.get("precision", {}).get("amount", 0.001)
+
+                # Ensure amount meets minimum requirement
+                if amount < min_amount:
+                    logger.warning(f"Order amount {amount} below minimum {min_amount} for {symbol}, adjusting to minimum")
+                    amount = min_amount
+
+                # Round amount to appropriate precision
+                if amount_precision > 0:
+                    amount = round(amount / amount_precision) * amount_precision
+
+            except Exception as e:
+                logger.warning(f"Could not validate order amount for {symbol}: {e}")
+
             # Convert to Binance order type
             binance_side = "buy" if side == OrderSide.BUY else "sell"
             binance_type = "market" if order_type == OrderType.MARKET else "limit"
-            
+
             params = {}
             if client_order_id:
                 params["newClientOrderId"] = client_order_id
-            
+
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self.exchange.create_order,

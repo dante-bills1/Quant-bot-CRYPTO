@@ -30,7 +30,26 @@ class BybitExchange(CryptoExchange):
         self.ws_url = "wss://stream.bybit.com/v5/public/linear" if not sandbox else "wss://stream-testnet.bybit.com/v5/public/linear"
         self._ws_connections = {}
         self._ws_callbacks = {}
-        
+        self.network_error_count = 0
+        self.last_network_error_time = 0
+
+    def _handle_network_error(self, operation: str, symbol: str = "") -> None:
+        """Handle network errors and track consecutive failures."""
+        current_time = time.time()
+        self.network_error_count += 1
+
+        # Reset counter if it's been more than 5 minutes since last error
+        if current_time - self.last_network_error_time > 300:  # 5 minutes
+            self.network_error_count = 1
+
+        self.last_network_error_time = current_time
+
+        if self.network_error_count >= 5:
+            logger.error(f"🚨 Bybit exchange appears to be down or unreachable ({self.network_error_count} consecutive network errors)")
+            logger.error("Consider switching to live mode by setting CRYPTO_SANDBOX=false in your .env file")
+        else:
+            logger.warning(f"Network error during {operation} for {symbol or 'exchange'} ({self.network_error_count} consecutive errors)")
+
     async def connect(self) -> bool:
         """Connect to Bybit exchange."""
         try:
@@ -127,7 +146,7 @@ class BybitExchange(CryptoExchange):
             ticker = await asyncio.get_event_loop().run_in_executor(
                 None, self.exchange.fetch_ticker, symbol, {"category": "linear"}
             )
-            
+
             return Ticker(
                 symbol=symbol,
                 bid=float(ticker.get("bid") or 0),
@@ -138,38 +157,65 @@ class BybitExchange(CryptoExchange):
                 volume=float(ticker.get("baseVolume") or 0),
                 timestamp=int(ticker.get("timestamp") or (time.time() * 1000))
             )
-            
+
         except Exception as e:
-            logger.error(f"Failed to get ticker for {symbol}: {e}")
-            return Ticker(symbol=symbol, bid=0, ask=0, last=0, high=0, low=0, volume=0, timestamp=0)
+            error_msg = str(e).lower()
+            if "network" in error_msg or "connection" in error_msg or "resolve" in error_msg or "timeout" in error_msg:
+                self._handle_network_error("ticker fetch", symbol)
+                return Ticker(symbol=symbol, bid=0, ask=0, last=0, high=0, low=0, volume=0, timestamp=int(time.time() * 1000))
+            else:
+                logger.error(f"Failed to get ticker for {symbol}: {e}")
+                return Ticker(symbol=symbol, bid=0, ask=0, last=0, high=0, low=0, volume=0, timestamp=0)
     
     async def get_historical_data(
-        self, 
-        symbol: str, 
-        timeframe: str, 
+        self,
+        symbol: str,
+        timeframe: str,
         limit: int = 1000
     ) -> pd.DataFrame:
         """Get historical OHLCV data."""
         try:
+            # Try linear (futures) first
             ohlcv = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                self.exchange.fetch_ohlcv, 
-                symbol, 
-                timeframe, 
-                None, 
-                limit, 
+                None,
+                self.exchange.fetch_ohlcv,
+                symbol,
+                timeframe,
+                None,
+                limit,
                 {"category": "linear"}
             )
-            
-            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-            df.set_index("timestamp", inplace=True)
-            
-            return df
-            
+
+            # If no data from linear, try spot market
+            if not ohlcv:
+                logger.info(f"No linear data for {symbol}, trying spot market")
+                ohlcv = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self.exchange.fetch_ohlcv,
+                    symbol,
+                    timeframe,
+                    None,
+                    limit,
+                    {"category": "spot"}
+                )
+
+            if ohlcv:
+                df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+                df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+                df.set_index("timestamp", inplace=True)
+                return df
+            else:
+                logger.warning(f"No historical data available for {symbol}")
+                return None
+
         except Exception as e:
-            logger.error(f"Failed to get historical data for {symbol}: {e}")
-            return pd.DataFrame()
+            error_msg = str(e).lower()
+            if "network" in error_msg or "connection" in error_msg or "resolve" in error_msg or "timeout" in error_msg:
+                self._handle_network_error("historical data fetch", symbol)
+                return None
+            else:
+                logger.error(f"Failed to get historical data for {symbol}: {e}")
+                return None
     
     async def place_order(
         self,
@@ -183,14 +229,32 @@ class BybitExchange(CryptoExchange):
     ) -> Order:
         """Place a new order."""
         try:
+            # Validate and adjust order amount to meet minimum requirements
+            try:
+                market = self.exchange.market(symbol)
+                min_amount = market.get("limits", {}).get("amount", {}).get("min", 1.0)
+                amount_precision = market.get("precision", {}).get("amount", 1.0)
+
+                # Ensure amount meets minimum requirement
+                if amount < min_amount:
+                    logger.warning(f"Order amount {amount} below minimum {min_amount} for {symbol}, adjusting to minimum")
+                    amount = min_amount
+
+                # Round amount to appropriate precision
+                if amount_precision > 0:
+                    amount = round(amount / amount_precision) * amount_precision
+
+            except Exception as e:
+                logger.warning(f"Could not validate order amount for {symbol}: {e}")
+
             # Convert to Bybit order type
             bybit_side = "buy" if side == OrderSide.BUY else "sell"
             bybit_type = "market" if order_type == OrderType.MARKET else "limit"
-            
+
             params = {"category": "linear"}
             if client_order_id:
                 params["clientOrderId"] = client_order_id
-            
+
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self.exchange.create_order,
@@ -333,8 +397,13 @@ class BybitExchange(CryptoExchange):
             return result
             
         except Exception as e:
-            logger.error(f"Failed to get positions: {e}")
-            return []
+            error_msg = str(e).lower()
+            if "network" in error_msg or "connection" in error_msg or "resolve" in error_msg or "timeout" in error_msg:
+                self._handle_network_error("positions fetch")
+                return []
+            else:
+                logger.error(f"Failed to get positions: {e}")
+                return []
     
     async def close_position(self, symbol: str, side: str) -> bool:
         """Close a position."""

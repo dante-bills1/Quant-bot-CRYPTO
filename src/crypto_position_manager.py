@@ -121,13 +121,22 @@ class CryptoPositionManager:
                 return False
             
             # Determine close side (opposite of open side)
-            close_side = "sell" if position.get('side', '').lower() == 'long' else "buy"
+            position_type = position.get('type', '').lower()
+            close_side = "sell" if position_type == 'buy' else "buy"
             
+            # Get position volume/size
+            volume = position.get('volume', 0)
+            if volume <= 0:
+                logger.warning(f"Invalid position volume {volume} for {symbol}")
+                return False
+
+            logger.info(f"Attempting to close position for {symbol}: volume={volume}, side={close_side}")
+
             # Close position
             result = await self.crypto_handler.place_order(
                 symbol=symbol,
                 side=close_side,
-                amount=position.get('size', 0),
+                amount=volume,
                 price=None,  # Market order
                 order_type="market"
             )
@@ -380,7 +389,16 @@ class CryptoPositionManager:
         except Exception as e:
             logger.error(f"Error checking scalping exit for {symbol}: {str(e)}")
             return False
-    
+
+    async def manage_open_trades(self) -> Dict[str, Any]:
+        """
+        Manage open trades (alias for manage_positions for compatibility).
+
+        Returns:
+            Management summary
+        """
+        return await self.manage_positions()
+
     async def manage_positions(self) -> Dict[str, Any]:
         """
         Main position management loop.

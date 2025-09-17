@@ -1,6 +1,5 @@
 import asyncio
 import traceback
-import pytz
 import time
 import importlib.util
 import inspect
@@ -12,7 +11,7 @@ from loguru import logger
 import copy
 import pandas as pd
 
-# MT5Handler removed - using CryptoHandler instead
+# Crypto Trading Bot - No MT5 dependencies
 from src.crypto_handler import CryptoHandler
 from src.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
@@ -21,6 +20,7 @@ from src.crypto_position_manager import CryptoPositionManager
 from src.crypto_signal_processor import CryptoSignalProcessor
 from src.crypto_performance_tracker import CryptoPerformanceTracker
 from src.crypto_data_manager import CryptoDataManager
+from src.crypto_state_manager import get_crypto_state_manager
 
 
 # Define a base SignalGenerator class if it doesn't exist elsewhere
@@ -121,14 +121,13 @@ class TradingBot:
         else:
             logger.info("No external config provided, using default configurations from config.py.")
 
-        # self.config stores the original passed_config for direct access to other potential top-level keys like 'mt5_handler'
+        # Store the original passed_config for direct access to other potential top-level keys
         self.config = passed_config
 
-        # Initialize magic number for backward compatibility (crypto exchanges don't use this, but keeping for MT5-style identification)
+        # Initialize magic number for strategy identification (used for trade tracking)
         self.magic_number = self.trading_config.get('magic_number', 1235)
 
-        # Initialize market status tracking
-        self.market_status = {}  # Track market open/closed status for each symbol
+        # Crypto markets are 24/7 - no market status tracking needed
         
         # Initialize Crypto handler first (needed by other components)
         crypto_handler_candidate = self.config.get('crypto_handler') # Check from original passed_config
@@ -216,30 +215,30 @@ class TradingBot:
             crypto_handler=self.crypto_handler,
             config=self.config
         )
+
+        # Initialize state manager for persistent trading state
+        self.state_manager = get_crypto_state_manager()
         
         # Initialize signal generators
         self.signal_generator_class = signal_generator_class
         self.signal_generators = []
-        self.latest_prices = {}  # Initialize the missing latest_prices dictionary
+        self.latest_prices = {}  # Track latest prices for analysis
         
-        # Set state tracking variables
+        # Trading configuration flags
         self.close_positions_on_shutdown = self.config.get('close_positions_on_shutdown', False)
-        # Explicitly use the trading_config value, with a default of False for position additions
         self.allow_position_additions = self.trading_config.get('allow_position_additions', False)
         self.use_trailing_stop = self.config.get('use_trailing_stop', True)
-        self.trading_enabled = self.config.get('trading_enabled', True)  # Enabled by default
-        self.real_time_monitoring_enabled = self.config.get('real_time_monitoring_enabled', True)  # Enable real-time monitoring by default
-        self.startup_notification_sent = False  # Flag to track startup notification
-        self.stop_requested = False
+        self.trading_enabled = self.config.get('trading_enabled', True)
+        self.real_time_monitoring_enabled = self.config.get('real_time_monitoring_enabled', True)
+        self.startup_notification_sent = False
         
         self.start_time = datetime.now()
         self.active_trades = {}
         self.pending_trades = {}
         
-        # State management
+        # Core state management
         self.running = False
-        self.shutdown_requested = False  # Flag to gracefully exit the main loop
-        self.should_stop = False  # Flag to gracefully exit the analysis cycle
+        self.shutdown_requested = False
         self.signals: List[Dict] = []
         self.trade_counter = 0
         self.last_signal = {}  # Dictionary to track last signal timestamp and direction per symbol
@@ -248,26 +247,21 @@ class TradingBot:
         self.last_tick_times = {} # Tracks the last seen tick timestamp to avoid redundant analysis
         self.last_analysis_time = {} # Tracks the last analysis time per symbol
         
-        # Timezone handling
-        self.ny_timezone = pytz.timezone('America/New_York')
+        # Crypto markets are 24/7 - no timezone restrictions
         
         # Signal thresholds
         self.min_confidence = self.trading_config.get("min_confidence", 0.6)  # Default to 60% confidence
         
         # Trade management
-        self.trailing_stop_enabled = True
         self.trailing_stop_data = {}  # Store trailing stop data for open positions
         
         logger.info("TradingBot initialized with enhanced multi-timeframe analysis capabilities")
 
-        self.main_loop_task = None
-        self.main_task = None # Renamed from main_loop_task
-        self._monitor_trades_task = None
+        # Async task management
+        self.main_task = None
+        self.monitor_trades_task = None
         self.data_fetch_task = None
         self.queue_processor_task = None
-
-        # Log config order at the very start
-        logger.info(f"[TRACE INIT] Initial trading_config signal_generators order: {self.trading_config.get('signal_generators', 'NOT FOUND')}")
 
     def get_default_lookback_for_timeframe(self, timeframe: str) -> int:
         """
@@ -275,13 +269,13 @@ class TradingBot:
         These values are chosen to accommodate common long-period indicators.
         """
         timeframe_defaults = {
-            'M1': 300,   # Adjusted for efficiency
-            'M5': 250,   # A common default
-            'M15': 200,
-            'M30': 150,
-            'H1': 100,
-            'H4': 100,
-            'D1': 100
+            '1m': 300,   # Adjusted for efficiency
+            '5m': 250,   # A common default
+            '15m': 200,
+            '30m': 150,
+            '1h': 100,
+            '4h': 100,
+            '1d': 100
         }
         # Default to 250 if timeframe is not in the map
         return timeframe_defaults.get(timeframe.upper(), 250)
@@ -425,7 +419,12 @@ class TradingBot:
             return
 
         if latest_timestamp > last_known_timestamp:
-            logger.info(f"🕯️ New candle detected for {symbol}/{timeframe}. Timestamp: {datetime.fromtimestamp(latest_timestamp)}")
+            # Handle both second and millisecond timestamps
+            display_timestamp = latest_timestamp
+            if latest_timestamp > 1e10:  # If timestamp is in milliseconds
+                display_timestamp = latest_timestamp / 1000
+
+            logger.info(f"🕯️ New candle detected for {symbol}/{timeframe}. Timestamp: {datetime.fromtimestamp(display_timestamp)}")
             self.last_candle_timestamps[key] = latest_timestamp
             
             asyncio.create_task(self.run_analysis_cycle_for_symbol(symbol))
@@ -886,7 +885,7 @@ class TradingBot:
                 active_positions = await self.crypto_handler.get_open_positions() if self.crypto_handler is not None else []
                 
                 if not active_positions:
-                    # No open positions, no need to check market status or manage trades
+                    # No open positions to monitor
                     logger.debug("No active positions to monitor, sleeping for 5 minutes")
                     await asyncio.sleep(300)  # Sleep for 5 minutes when no positions
                     continue
@@ -894,19 +893,7 @@ class TradingBot:
                 # Get unique symbols from active positions
                 active_symbols = set(pos.get("symbol") for pos in active_positions if pos.get("symbol"))
                 
-                # Check if any of the markets for the active positions are open
-                markets_open = False
-                for symbol in active_symbols:
-                    if await self.is_market_open(symbol):
-                        markets_open = True
-                        break
-                
-                if not markets_open:
-                    logger.debug("Markets are closed for all active positions. Monitoring paused.")
-                    await asyncio.sleep(300)  # Check every 5 minutes during closed markets
-                    continue
-                
-                # Markets are open for at least one active position, manage trades
+                # Crypto markets are always open - proceed with trade management
                 await self.position_manager.manage_open_trades()
                 
                 # Sleep for a shorter interval (5 seconds) to monitor trades more frequently
@@ -1088,64 +1075,7 @@ class TradingBot:
         self.close_positions_on_shutdown = False
         logger.info("Disabled automatic closing of positions on shutdown")
         return "✅ Automatic closing of positions on shutdown is now DISABLED"
-            
-    async def is_market_open(self, symbol=None) -> bool:
-        """
-        Check if the market is currently open for trading based on tick activity.
-        
-        Args:
-            symbol: Optional trading symbol to check for specific instrument
-                   If None, checks if any symbol is active
-                   
-        Returns:
-            bool: True if the market is open, False otherwise
-        """
-        try:
-            # If no specific symbol is provided, check all configured symbols
-            if symbol is None:
-                symbols_to_check = self.symbols
-                
-                # Return True if any symbol is open
-                for sym in symbols_to_check:
-                    if await self.is_market_open(sym):
-                        return True
-                return False
-            
-            # For a specific symbol, check for recent tick activity
-            if not hasattr(self, 'crypto_handler') or not self.crypto_handler:
-                logger.warning("Crypto handler not available for tick-based market detection")
-                return False
-                
-            # Get the latest tick
-            latest_tick = await self.crypto_handler.get_last_tick(symbol)
-            if latest_tick is None:
-                logger.debug(f"No tick data available for {symbol}, market likely closed")
-                return False
-                
-            # Check tick freshness to determine if market is open
-            now = time.time()
-            tick_time = latest_tick.get('time', 0)
-            if isinstance(tick_time, float) and tick_time < 1e10:  # If in seconds, convert to milliseconds
-                tick_time = tick_time * 1000
-            tick_time = tick_time / 1000  # Convert back to seconds for comparison
-            time_diff = now - tick_time
-            
-            # Consider market open if tick is recent (within last 1 minute)
-            # Reduced from 5 minutes to be more responsive to market conditions
-            MAX_TICK_AGE = 60  # 60 seconds
-            
-            if time_diff <= MAX_TICK_AGE:
-                logger.debug(f"Market for {symbol} is open - latest tick {time_diff:.1f} seconds ago")
-                return True
-            else:
-                logger.debug(f"Market for {symbol} appears closed - latest tick is {time_diff:.1f} seconds old")
-                return False
-            
-        except Exception as e:
-            logger.error(f"Error in tick-based market detection for {symbol}: {str(e)}")
-            logger.error(traceback.format_exc())
-            # Default to closed on error as a safety measure
-            return False
+   
 
     async def request_shutdown(self):
         """Request a graceful shutdown of the trading bot."""
@@ -1459,21 +1389,17 @@ class TradingBot:
                 self.symbols = self.trading_symbols
                 logger.info(f"Loaded symbols from trading_symbols attribute: {self.symbols}")
                 
-            # Fall back to default symbols with 'm' suffix if none found
+            # Fall back to default crypto symbols if none found
             if not self.symbols:
-                self.symbols = ['EURUSDm', 'GBPUSDm', 'USDJPYm', 'AUDUSDm', 'USDCADm']
-                logger.warning(f"No symbols found in configuration, using defaults with 'm' suffix: {self.symbols}")
-            
-            # Override self.trading_symbols to match the loaded symbols
-            self.trading_symbols = self.symbols
-                
+                self.symbols = ['BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT']
+                logger.warning(f"No symbols found in configuration, using crypto defaults: {self.symbols}")
+
         except Exception as e:
             logger.error(f"Error loading symbols from configuration: {str(e)}")
             logger.error(traceback.format_exc())
-            # Set default symbols with 'm' suffix as fallback
-            self.symbols = ['EURUSDm', 'GBPUSDm', 'USDJPYm', 'AUDUSDm', 'USDCADm']
-            self.trading_symbols = self.symbols
-            logger.warning(f"Using default symbols with 'm' suffix after error: {self.symbols}")
+            # Set default crypto symbols as fallback
+            self.symbols = ['BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT']
+            logger.warning(f"Using default crypto symbols after error: {self.symbols}")
         
         # Ensure no duplicates
         self.symbols = list(dict.fromkeys(self.symbols))

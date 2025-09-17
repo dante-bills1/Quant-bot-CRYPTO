@@ -332,24 +332,50 @@ class VolumeMAOscillator(SignalGenerator):
             return series
     
     def _calculate_atr(self, df: pd.DataFrame, n: int) -> pd.Series:
-        """Calculate Average True Range."""
+        """
+        Calculate Average True Range using enhanced method from reference bot.
+
+        Based on reference bot's ATR calculation pattern:
+        - Proper true range calculation
+        - Rolling mean with minimum periods
+        - Forward/backward fill for edge cases
+        - Enhanced error handling
+        """
         try:
+            if df is None or df.empty:
+                logger.warning("No data provided for ATR calculation")
+                return pd.Series(dtype=float)
+
+            required_columns = ['high', 'low', 'close']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                logger.error(f"Missing required columns for ATR: {missing_columns}")
+                return pd.Series(dtype=float)
+
             high = df['high']
             low = df['low']
             close = df['close']
-            
+
+            # Calculate True Range
             tr1 = high - low
-            tr2 = (high - close.shift(1)).abs()
-            tr3 = (low - close.shift(1)).abs()
-            
-            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            atr = tr.ewm(alpha=1/n, adjust=False).mean()
-            
+            tr2 = abs(high - close.shift(1))
+            tr3 = abs(low - close.shift(1))
+
+            true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+            # Calculate ATR using rolling mean with minimum periods (reference bot pattern)
+            atr = true_range.rolling(window=n, min_periods=n).mean()
+
+            # Handle edge cases with forward/backward fill
+            if not atr.empty:
+                atr = atr.fillna(method='bfill').fillna(method='ffill').fillna(0.0)
+
+            logger.debug(f"Calculated ATR with period {n}: {len(atr)} values")
             return atr
-            
+
         except Exception as e:
-            logger.error(f"Error calculating ATR: {e}")
-            return pd.Series(0, index=df.index)
+            logger.error(f"Error calculating ATR: {str(e)}")
+            return pd.Series(dtype=float)
     
     def _calculate_volume_filter(self, df: pd.DataFrame) -> pd.Series:
         """Calculate volume filter."""

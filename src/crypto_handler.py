@@ -6,6 +6,7 @@ replacing the MT5Handler with crypto exchange functionality.
 """
 
 import asyncio
+import math
 import time
 from typing import Dict, List, Optional, Any, Tuple, Callable
 import pandas as pd
@@ -120,12 +121,80 @@ class CryptoHandler:
         """Get historical market data."""
         if not self.connected or not self.exchange:
             return None
-        
+
         try:
-            return await self.exchange.get_historical_data(symbol, timeframe, num_candles)
+            return await self.fetch_ohlcv(symbol, timeframe, num_candles)
         except Exception as e:
             logger.error(f"Failed to get market data for {symbol}: {e}")
             return None
+
+    async def fetch_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str,
+        limit: int = 1000,
+        params: Optional[Dict[str, Any]] = None
+    ) -> pd.DataFrame:
+        """
+        Fetch OHLCV data with proper incomplete bar handling.
+
+        Based on reference bot's fetch_ohlcv pattern:
+        - Fetches data with category parameter
+        - Removes incomplete current bar
+        - Reindexes to ensure complete timeframe grid
+        - Handles volume data properly
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe string (e.g., '4h')
+            limit: Number of candles to fetch
+            params: Additional parameters
+
+        Returns:
+            DataFrame with OHLCV data
+        """
+        try:
+            # Use linear category for perpetual futures
+            fetch_params = {"category": "linear"}
+            if params:
+                fetch_params.update(params)
+
+            # Fetch OHLCV data
+            ohlcv = await self.exchange.get_historical_data(symbol, timeframe, limit)
+
+            if ohlcv is None or ohlcv.empty:
+                logger.warning(f"No OHLCV data received for {symbol} {timeframe}")
+                return pd.DataFrame()
+
+            # Convert to DataFrame with proper column names
+            df = pd.DataFrame(ohlcv, columns=["timestamp","open","high","low","close","volume"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+            df.set_index("timestamp", inplace=True)
+
+            # Remove incomplete current bar
+            if len(df) >= 2:
+                now = int(time.time() * 1000)
+                tf_ms = self.exchange.parse_timeframe(timeframe) * 1000
+                last_ts = int(df.index[-1].value / 1e6)  # Convert to milliseconds
+
+                if now - last_ts < tf_ms:
+                    logger.debug(f"Removing incomplete current bar for {symbol} {timeframe}")
+                    df = df.iloc[:-1]  # Remove open bar
+
+            # Reindex to ensure complete timeframe grid
+            if not df.empty:
+                start = df.index[0].floor(timeframe)
+                end = df.index[-1].floor(timeframe)
+                grid = pd.date_range(start, end, freq=timeframe, tz="UTC")
+                df = df.reindex(grid).ffill()
+                df["volume"] = df["volume"].fillna(0)
+
+            logger.debug(f"Fetched {len(df)} OHLCV candles for {symbol} {timeframe}")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error fetching OHLCV data for {symbol} {timeframe}: {e}")
+            return pd.DataFrame()
     
     async def get_ticker(self, symbol: str) -> Optional[Ticker]:
         """Get ticker data for a symbol."""
@@ -156,6 +225,46 @@ class CryptoHandler:
             return None
     
     # Order Management Methods
+    async def place_order(
+        self,
+        symbol: str,
+        side: str,
+        amount: float,
+        order_type: str = "market",
+        price: Optional[float] = None,
+        stop_price: Optional[float] = None,
+        client_order_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Place an order (generic method that delegates to specific order types).
+
+        Args:
+            symbol: Trading symbol
+            side: 'buy' or 'sell'
+            amount: Order amount
+            order_type: 'market' or 'limit'
+            price: Limit price (required for limit orders)
+            stop_price: Stop price (optional)
+            client_order_id: Client order ID (optional)
+
+        Returns:
+            Order result or None
+        """
+        try:
+            if order_type.lower() == "market":
+                return await self.place_market_order(symbol, side, amount, stop_price or 0, None, "", client_order_id)
+            elif order_type.lower() == "limit":
+                if price is None:
+                    logger.error("Price is required for limit orders")
+                    return None
+                return await self.place_limit_order(symbol, side, amount, price, stop_price or 0, None, "", client_order_id)
+            else:
+                logger.error(f"Unsupported order type: {order_type}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to place {order_type} order for {symbol}: {e}")
+            return None
+
     async def place_market_order(
         self,
         symbol: str,
@@ -169,28 +278,46 @@ class CryptoHandler:
         """Place a market order."""
         if not self.connected or not self.exchange:
             return None
-        
+
         try:
+            # Get current price for quantity enforcement
+            current_price = await self._get_current_price_for_order(symbol)
+            if not current_price:
+                logger.error(f"Could not get current price for {symbol}")
+                return None
+
+            # Enforce minimum quantity requirements
+            adj_volume, debug = self._enforce_min_qty(volume, current_price, symbol)
+
+            if adj_volume <= 0:
+                logger.warning(f"[skip] Qty below exchange minimums for {symbol}; order skipped.")
+                logger.debug(f"Qty enforcement debug: {debug}")
+                return None
+
+            # Log quantity adjustment if it changed
+            if abs(adj_volume - volume) > 1e-8:
+                logger.info(f"[size] {symbol} desired={volume:.6f} -> send={adj_volume:.6f}")
+
             side = OrderSide.BUY if order_type.lower() == "buy" else OrderSide.SELL
-            
+
             order = await self.exchange.place_order(
                 symbol=symbol,
                 side=side,
                 order_type=OrderType.MARKET,
-                amount=volume
+                amount=adj_volume
             )
-            
+
             # Set stop loss and take profit if provided
             if stop_loss or take_profit:
                 # Note: In crypto, SL/TP are typically handled by the exchange
                 # This is a simplified implementation
                 pass
-            
+
             return {
                 "ticket": order.id,
                 "symbol": symbol,
                 "type": order_type,
-                "volume": volume,
+                "volume": adj_volume,
                 "price": order.price or 0.0,
                 "sl": stop_loss,
                 "tp": take_profit,
@@ -198,7 +325,7 @@ class CryptoHandler:
                 "magic": magic_number,
                 "time": order.timestamp or int(time.time() * 1000)
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to place market order: {e}")
             return None
@@ -256,16 +383,20 @@ class CryptoHandler:
             
             result = []
             for pos in positions:
+                # Skip positions with invalid or zero size
+                if not hasattr(pos, 'size') or pos.size <= 0:
+                    continue
+
                 result.append({
                     "ticket": f"pos_{pos.symbol}_{pos.side}",
                     "symbol": pos.symbol,
                     "type": "buy" if pos.side == "long" else "sell",
-                    "volume": pos.size,
-                    "price_open": pos.entry_price,
-                    "price_current": pos.mark_price,
+                    "volume": float(pos.size),
+                    "price_open": float(pos.entry_price or 0),
+                    "price_current": float(pos.mark_price or 0),
                     "sl": 0.0,  # Would need to track separately
                     "tp": 0.0,  # Would need to track separately
-                    "profit": pos.unrealized_pnl,
+                    "profit": float(pos.unrealized_pnl or 0),
                     "magic": magic_number or 0,
                     "time": pos.timestamp or int(time.time() * 1000)
                 })
@@ -419,6 +550,138 @@ class CryptoHandler:
         """Check if handler is connected."""
         return self.connected and self.exchange is not None
     
+    # ---- Market Filters & Quantity Enforcement ----
+    def _market_filters(self, symbol: str) -> Tuple[float, float, float]:
+        """
+        Get market filters for a symbol.
+
+        Based on reference bot's _market_filters pattern:
+        - Minimum quantity
+        - Step size for quantity
+        - Minimum cost
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            Tuple of (min_qty, step, min_cost)
+        """
+        try:
+            if not self.connected or not self.exchange:
+                return 0.0, 0.0, 0.0
+
+            market = self.exchange.market(symbol)
+            min_qty = None
+            step = None
+            min_cost = None
+
+            # CCXT standard limits
+            try:
+                min_qty = ((market.get("limits") or {}).get("amount") or {}).get("min")
+                min_cost = ((market.get("limits") or {}).get("cost") or {}).get("min")
+            except Exception:
+                pass
+
+            # Precision as fallback for step
+            try:
+                prec = (market.get("precision") or {}).get("amount")
+                if prec is not None:
+                    step = 10 ** (-int(prec))
+            except Exception:
+                pass
+
+            # Exchange-specific info (Bybit v5 format)
+            info = market.get("info") or {}
+            if self.exchange_name == "bybit":
+                lot = info.get("lotSizeFilter") or {}
+                try:
+                    if lot.get("minOrderQty") is not None:
+                        min_qty = float(lot["minOrderQty"])
+                    if lot.get("qtyStep") is not None:
+                        step = float(lot["qtyStep"])
+                except Exception:
+                    pass
+
+            return float(min_qty or 0.0), float(step or 0.0), float(min_cost or 0.0)
+
+        except Exception as e:
+            logger.error(f"Error getting market filters for {symbol}: {e}")
+            return 0.0, 0.0, 0.0
+
+    def _enforce_min_qty(self, desired_qty: float, price: float, symbol: str) -> Tuple[float, Dict[str, float]]:
+        """
+        Enforce minimum quantity requirements.
+
+        Based on reference bot's _enforce_min_qty pattern:
+        - Apply minimum quantity limits
+        - Apply minimum cost limits
+        - Round to valid step size
+        - Return detailed debug info
+
+        Args:
+            desired_qty: Desired quantity
+            price: Current price
+            symbol: Trading symbol
+
+        Returns:
+            Tuple of (adjusted_qty, debug_info)
+        """
+        min_qty, step, min_cost = self._market_filters(symbol)
+
+        debug = {
+            "desired": desired_qty,
+            "step": step,
+            "min_qty": min_qty,
+            "min_cost": min_cost,
+            "price": price
+        }
+
+        qty = max(desired_qty, 0.0)
+
+        # Round to valid step size first
+        if step > 0:
+            qty = round(qty / step) * step
+
+        # Apply minimum quantity
+        if min_qty and qty < min_qty:
+            qty = min_qty
+
+        # Apply minimum cost requirement
+        if min_cost and price > 0:
+            min_qty_from_cost = min_cost / price
+            if qty * price < min_cost:
+                qty = min_qty_from_cost
+
+        # Round again to ensure step compliance
+        if step > 0:
+            qty = round(qty / step) * step
+
+        debug["final"] = qty
+        return qty, debug
+
+    def _ceil_to_step(self, x: float, step: float) -> float:
+        """Round up to the nearest step size."""
+        if step and step > 0:
+            return math.ceil(x / step) * step
+        return x
+
+    def _floor_to_step(self, x: float, step: float) -> float:
+        """Round down to the nearest step size."""
+        if step and step > 0:
+            return math.floor(x / step) * step
+        return x
+
+    async def _get_current_price_for_order(self, symbol: str) -> Optional[float]:
+        """Get current price for order placement."""
+        try:
+            ticker = await self.get_ticker(symbol)
+            if ticker:
+                return ticker.last
+            return None
+        except Exception as e:
+            logger.error(f"Error getting current price for {symbol}: {e}")
+            return None
+
     async def get_historical_data(
         self,
         symbol: str,
@@ -429,7 +692,7 @@ class CryptoHandler:
         """Get historical data for a date range."""
         if not self.connected or not self.exchange:
             return None
-        
+
         try:
             # For now, return recent data (exchanges typically don't support arbitrary date ranges)
             return await self.exchange.get_historical_data(symbol, timeframe, 1000)
@@ -444,6 +707,13 @@ class CryptoHandler:
             data = await self.get_market_data(symbol, timeframe, 1)
             if data is not None and not data.empty:
                 return int(data.index[-1].timestamp() * 1000)
+
+            # Fallback: try to get timestamp from ticker
+            ticker = await self.get_ticker(symbol)
+            if ticker and ticker.timestamp > 0:
+                logger.info(f"Using ticker timestamp for {symbol} as fallback")
+                return ticker.timestamp
+
             return None
         except Exception as e:
             logger.error(f"Failed to get latest candle time: {e}")
