@@ -707,10 +707,10 @@ class TradingBot:
                     break
                 
                 # Check if monitor task has exited
-                if self._monitor_trades_task is not None and self._monitor_trades_task.done():
+                if self.monitor_trades_task is not None and self.monitor_trades_task.done():
                     # If monitor task exited with an error, log it
-                    if self._monitor_trades_task.exception():
-                        logger.error(f"Monitor task exited with an error: {self._monitor_trades_task.exception()}")
+                    if self.monitor_trades_task.exception():
+                        logger.error(f"Monitor task exited with an error: {self.monitor_trades_task.exception()}")
                         logger.error(traceback.format_exc())
                     else:
                         logger.info("Monitor task completed normally")

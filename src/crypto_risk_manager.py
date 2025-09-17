@@ -162,7 +162,7 @@ class CryptoRiskManager:
             atr = true_range.rolling(window=period, min_periods=period).mean()
 
             # Handle edge cases
-            atr = atr.fillna(method='bfill').fillna(0.0)
+            atr = atr.bfill().fillna(0.0)
 
             logger.debug(f"Calculated ATR with period {period}: {len(atr)} values")
             return atr
