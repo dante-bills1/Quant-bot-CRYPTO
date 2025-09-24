@@ -1337,11 +1337,13 @@ class TradingBot:
             logger.info("Signal processor initialized with crypto components")
 
             # Initialize Position Manager with crypto components
+            # Merge trading_config with main config to ensure symbols are available
+            position_config = {**self.config, **self.trading_config}
             self.position_manager = CryptoPositionManager(
                 crypto_handler=self.crypto_handler,
                 risk_manager=self.risk_manager,
                 telegram_bot=self.telegram_bot,
-                config=self.config
+                config=position_config
             )
             logger.info("Position manager initialized with crypto components")
 

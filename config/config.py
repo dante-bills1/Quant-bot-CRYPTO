@@ -59,6 +59,7 @@ TRADING_CONFIG = {
     },
 
     "close_positions_on_shutdown": False,
+    "position_timeout": 86400,  # 24 hours timeout (set to 0 to disable)
     "signal_generators": [
         "VolumeMAOscillator",
         # "MeanReversionScalper",
@@ -75,7 +76,7 @@ TRADING_CONFIG = {
 TELEGRAM_CONFIG = {
     "token": os.getenv("TELEGRAM_BOT_TOKEN"),
     "allowed_users": [int(id) for id in os.getenv("TELEGRAM_ALLOWED_USERS", "").split(",") if id.strip()],
-    "enabled": True
+    "enabled": False
 }
 
 # ================= Logging Configuration =================

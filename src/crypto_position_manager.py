@@ -56,7 +56,7 @@ class CryptoPositionManager:
         
         # Position management settings
         self.max_positions = self.config.get('max_positions', 10)
-        self.position_timeout = self.config.get('position_timeout', 3600)  # 1 hour timeout
+        self.position_timeout = self.config.get('position_timeout', 86400)  # 24 hour timeout (default)
 
         # Get configured symbols for position filtering
         self.configured_symbols = set()

@@ -4,6 +4,7 @@ Telegram Bot Module for trading notifications and commands.
 # Standard library imports
 import asyncio
 import traceback
+import time
 from datetime import datetime, UTC
 from typing import Dict, Optional
 import logging
@@ -40,7 +41,8 @@ class TelegramBot:
         
         # Check if token is available
         if not self.token:
-            logger.error("No Telegram token found in config or environment variables")
+            logger.warning("No Telegram token found in config or environment variables")
+            logger.warning("Telegram notifications will be disabled. Set TELEGRAM_BOT_TOKEN environment variable to enable.")
             self.token = "dummy_token"  # Placeholder to avoid initialization errors
             
         # Get allowed user IDs
@@ -1557,7 +1559,12 @@ Stay profitable! 📈"""
         try:
             # Ensure bot is initialized
             if not self.is_initialized() or not self.application or not self.application.bot:
-                logger.error("Bot not initialized for sending message")
+                # Only log this error once per minute to avoid spam
+                current_time = time.time()
+                if not hasattr(self, '_last_init_error_time') or current_time - self._last_init_error_time > 60:
+                    logger.warning("Telegram bot not initialized - notifications disabled")
+                    logger.warning("To enable Telegram notifications, set TELEGRAM_BOT_TOKEN environment variable")
+                    self._last_init_error_time = current_time
                 return False
                 
             target_chat_ids = []
