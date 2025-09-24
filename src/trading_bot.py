@@ -17,7 +17,7 @@ from src.managers.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
 from src.telegram.crypto_telegram_command_handler import CryptoTelegramCommandHandler
 from src.managers.crypto_position_manager import CryptoPositionManager
-from src.crypto_signal_processor import CryptoSignalProcessor
+from src.utils.crypto_signal_processor import CryptoSignalProcessor
 from src.utils.crypto_performance_tracker import CryptoPerformanceTracker
 from src.managers.crypto_data_manager import CryptoDataManager
 from src.managers.crypto_state_manager import get_crypto_state_manager

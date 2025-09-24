@@ -15,7 +15,7 @@ import pandas as pd
 import ccxt
 from loguru import logger
 
-from src.crypto_exchange import (
+from crypto_exchange import (
     CryptoExchange, Order, Position, Balance, Ticker, 
     OrderType, OrderSide, OrderStatus
 )
