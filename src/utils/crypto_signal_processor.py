@@ -12,10 +12,10 @@ import asyncio
 import time
 import hashlib
 
-from src.crypto_risk_manager import CryptoRiskManager
+from src.managers.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
-from src.crypto_handler import CryptoHandler
-from src.crypto_position_manager import CryptoPositionManager
+from src.utils.crypto_handler import CryptoHandler
+from src.managers.crypto_position_manager import CryptoPositionManager
 
 class CryptoSignalProcessor:
     """

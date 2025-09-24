@@ -13,8 +13,8 @@ from typing import Dict, List, Optional, Any, Callable
 import pandas as pd
 from loguru import logger
 
-from src.crypto_handler import CryptoHandler
-from src.websocket_manager import WebSocketManager
+from src.utils.crypto_handler import CryptoHandler
+from src.utils.websocket_manager import WebSocketManager
 
 
 class CryptoDataManager:
