@@ -25,9 +25,9 @@ from loguru import logger
 from src.crypto_backtesting.engine import CryptoBacktester
 from src.crypto_backtesting.data_loader import load_crypto_historical_data
 from src.trading_bot import SignalGenerator
-from src.crypto_handler import CryptoHandler
+from src.utils.crypto_handler import CryptoHandler
 
-def _download_data_if_needed(symbol: str, timeframe: str, days: int) -> Path:
+async def _download_data_if_needed(symbol: str, timeframe: str, days: int) -> Path:
     """
     Checks if data exists, and if not, downloads it from crypto exchange.
     Returns the path to the data file.
@@ -44,7 +44,7 @@ def _download_data_if_needed(symbol: str, timeframe: str, days: int) -> Path:
     logger.info(f"For fully repeatable tests, it's best to use pre-downloaded data.")
 
     crypto_handler = CryptoHandler()
-    if not crypto_handler.initialize():
+    if not await crypto_handler.initialize():
         raise ConnectionError("Failed to initialize crypto handler. Cannot download data.")
 
     end_date = datetime.now()
@@ -52,7 +52,7 @@ def _download_data_if_needed(symbol: str, timeframe: str, days: int) -> Path:
 
     try:
         # Download historical data
-        data = crypto_handler.get_historical_data(
+        data = await crypto_handler.get_historical_data(
             symbol=symbol,
             timeframe=timeframe,
             start_date=start_date,
@@ -74,7 +74,8 @@ def _download_data_if_needed(symbol: str, timeframe: str, days: int) -> Path:
         logger.error(f"Failed to download data: {str(e)}")
         raise
     finally:
-        crypto_handler.close()
+        # CryptoHandler doesn't have a close method, just set to None
+        crypto_handler.exchange = None
 
 def _load_strategy_class(strategy_name: str) -> Type[SignalGenerator]:
     """
@@ -191,7 +192,7 @@ async def run_backtest(
         logger.error(f"Backtest failed: {str(e)}")
         raise
 
-def main():
+async def main():
     """Main entry point for the crypto backtest runner."""
     parser = argparse.ArgumentParser(description="Run crypto backtests")
     parser.add_argument("--strategy", required=True, help="Strategy class name")
@@ -208,20 +209,20 @@ def main():
         
         # Download data if needed
         if args.force_download:
-            data_file = _download_data_if_needed(args.symbol, args.timeframe, args.days)
+            data_file = await _download_data_if_needed(args.symbol, args.timeframe, args.days)
         else:
             data_file = Path("data") / f"{args.symbol.replace('/', '_')}_{args.timeframe}_{args.days}d.csv"
             if not data_file.exists():
-                data_file = _download_data_if_needed(args.symbol, args.timeframe, args.days)
+                data_file = await _download_data_if_needed(args.symbol, args.timeframe, args.days)
         
         # Run backtest
-        asyncio.run(run_backtest(
+        await run_backtest(
             strategy_class=strategy_class,
             symbol=args.symbol,
             timeframe=args.timeframe,
             days=args.days,
             data_file=data_file
-        ))
+        )
         
     except Exception as e:
         logger.error(f"Backtest runner failed: {str(e)}")
@@ -230,4 +231,4 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    exit(main())
+    exit(asyncio.run(main()))

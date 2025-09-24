@@ -178,19 +178,35 @@ class VolumeMAOscillator(SignalGenerator):
             
             signals = []
             
-            for sym, timeframes in market_data.items():
-                if self.primary_timeframe not in timeframes:
-                    continue
-                
-                df = timeframes[self.primary_timeframe]
+            # Handle different input formats
+            if isinstance(market_data, dict):
+                # Expected format: {symbol: {timeframe: DataFrame}}
+                for sym, timeframes in market_data.items():
+                    if self.primary_timeframe not in timeframes:
+                        continue
+                    
+                    df = timeframes[self.primary_timeframe]
+                    if df is None or df.empty or len(df) < self.min_candles:
+                        continue
+                    
+                    # Calculate indicators
+                    indicators = self._calculate_indicators(df)
+                    
+                    # Check for signals
+                    signal = self._check_signal(df, indicators, sym)
+                    if signal:
+                        signals.append(signal)
+            else:
+                # Handle single DataFrame input (from backtesting engine)
+                df = market_data
                 if df is None or df.empty or len(df) < self.min_candles:
-                    continue
+                    return []
                 
                 # Calculate indicators
                 indicators = self._calculate_indicators(df)
                 
                 # Check for signals
-                signal = self._check_signal(df, indicators, sym)
+                signal = self._check_signal(df, indicators, symbol or "UNKNOWN")
                 if signal:
                     signals.append(signal)
             

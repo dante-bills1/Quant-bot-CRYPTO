@@ -12,7 +12,7 @@ from backtesting import Strategy
 import asyncio
 
 from .base_strategy import CryptoBacktestStrategy, register_strategy
-from strategy.volume_ma_oscillator import VolumeMAOscillator
+from src.strategy.volume_ma_oscillator import VolumeMAOscillator
 
 
 @register_strategy("volume_ma_adapted")
@@ -48,6 +48,33 @@ class VolumeMABacktestAdapter(CryptoBacktestStrategy):
             pass
         except Exception as e:
             print(f"Error initializing adapted strategy: {e}")
+
+    def calculate_indicators(self):
+        """Calculate technical indicators used by the strategy."""
+        try:
+            # Indicators are calculated in the original strategy
+            # This is a placeholder for the abstract method
+            pass
+        except Exception as e:
+            print(f"Error calculating indicators: {e}")
+
+    def generate_signals(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Generate trading signals.
+
+        Args:
+            data: Current market data dictionary
+
+        Returns:
+            List of signal dictionaries
+        """
+        try:
+            # This method is called by the base strategy framework
+            # The actual signal generation happens in next() method
+            return []
+        except Exception as e:
+            print(f"Error generating signals: {e}")
+            return []
 
     def next(self):
         """Execute strategy logic for each new candle."""
