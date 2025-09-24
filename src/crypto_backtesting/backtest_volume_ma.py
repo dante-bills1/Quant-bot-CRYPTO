@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from crypto_backtesting import run_single_backtest, run_bayesian_optimization
-from strategy.volume_ma_oscillator import VolumeMAOscillator
+from src.strategy.volume_ma_oscillator import VolumeMAOscillator
 
 
 async def backtest_volume_ma_oscillator():
