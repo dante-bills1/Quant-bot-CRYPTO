@@ -275,8 +275,8 @@ class ExchangeFactory:
 
 
 # Register exchanges
-from exchanges.bybit_exchange import BybitExchange
-from exchanges.binance_exchange import BinanceExchange
+from .bybit_exchange import BybitExchange
+from .binance_exchange import BinanceExchange
 
 ExchangeFactory.register_exchange("bybit", BybitExchange)
 ExchangeFactory.register_exchange("binance", BinanceExchange)

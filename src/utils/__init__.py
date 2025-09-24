@@ -9,7 +9,10 @@ __all__ = [
     "calculate_tick_value",
     "convert_price_to_ticks",
     "logging_setup",
-    "performance_tracker",
+    "CryptoHandler",
+    "CryptoSignalProcessor", 
+    "CryptoPerformanceTracker",
+    "WebSocketManager",
     "market_utils",
 ]
 

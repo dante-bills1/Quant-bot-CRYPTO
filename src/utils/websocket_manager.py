@@ -12,7 +12,7 @@ import threading
 from typing import Dict, List, Optional, Callable, Any
 from loguru import logger
 
-from src.crypto_exchange import CryptoExchange
+from src.exchanges.crypto_exchange import CryptoExchange
 
 
 class WebSocketManager:
@@ -218,7 +218,7 @@ class WebSocketManager:
         """
         try:
             # Import here to avoid circular imports
-            from src.crypto_handler import CryptoHandler
+            from .crypto_handler import CryptoHandler
 
             # Create a background task for REST polling
             async def rest_polling_task():

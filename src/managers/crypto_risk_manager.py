@@ -13,7 +13,7 @@ import numpy as np
 
 # Use TYPE_CHECKING for import that's only used for type hints
 if TYPE_CHECKING:
-    from src.crypto_handler import CryptoHandler
+    from src.utils.crypto_handler import CryptoHandler
 from config.config import TRADING_CONFIG
 from src.utils.market_utils import calculate_tick_value, convert_price_to_ticks
 
