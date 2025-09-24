@@ -130,35 +130,69 @@ python main.py
 ```
 src/
 ├── crypto_backtesting/          # Backtesting framework
+│   ├── __init__.py
 │   ├── base_strategy.py         # Abstract base strategy class
 │   ├── bayesian_optimizer.py    # Bayesian parameter optimization
 │   ├── data_fetcher.py          # Historical data fetching
+│   ├── data_loader.py           # Data loading utilities
 │   ├── engine.py                # Backtesting engine
+│   ├── main.py                  # Backtesting main execution
 │   ├── metrics_calculator.py    # Performance metrics
 │   ├── vwap_swing_strategy.py   # VWAP swing strategy
-│   └── volume_ma_backtest_adapter.py  # Strategy adapter
+│   ├── volume_ma_backtest_adapter.py  # Strategy adapter
+│   └── backtest_volume_ma.py    # Volume MA backtest runner
 ├── exchanges/                   # Exchange implementations
-│   ├── binance_exchange.py     # Binance integration
-│   └── bybit_exchange.py       # Bybit integration
+│   ├── __init__.py
+│   ├── crypto_exchange.py       # Exchange abstraction layer
+│   ├── binance_exchange.py      # Binance integration
+│   └── bybit_exchange.py        # Bybit integration
+├── managers/                    # Management components
+│   ├── __init__.py
+│   ├── crypto_data_manager.py   # Data management
+│   ├── crypto_position_manager.py # Position management
+│   ├── crypto_risk_manager.py   # Risk management
+│   └── crypto_state_manager.py  # State management
 ├── strategy/                    # Trading strategies
+│   ├── __init__.py
 │   └── volume_ma_oscillator.py # Volume MA Oscillator strategy
 ├── telegram/                   # Telegram bot integration
-│   ├── telegram_bot.py         # Main Telegram bot
+│   ├── __init__.py
+│   ├── telegram_bot.py          # Main Telegram bot
 │   └── crypto_telegram_command_handler.py  # Command handlers
 ├── utils/                      # Utility modules
-│   ├── logging_setup.py        # Logging configuration
-│   └── market_utils.py         # Market utilities
-├── crypto_data_manager.py      # Data management
-├── crypto_exchange.py          # Exchange abstraction
-├── crypto_handler.py           # Unified exchange handler
-├── crypto_performance_tracker.py  # Performance tracking
-├── crypto_position_manager.py  # Position management
-├── crypto_risk_manager.py      # Risk management
-├── crypto_signal_processor.py  # Signal processing
-├── crypto_state_manager.py     # State management
-├── trading_bot.py              # Main trading bot
-└── websocket_manager.py        # WebSocket management
+│   ├── __init__.py
+│   ├── crypto_handler.py        # Unified exchange handler
+│   ├── crypto_signal_processor.py # Signal processing
+│   ├── crypto_performance_tracker.py # Performance tracking
+│   ├── websocket_manager.py     # WebSocket management
+│   ├── logging_setup.py         # Logging configuration
+│   └── market_utils.py          # Market utilities
+└── trading_bot.py              # Main trading bot orchestrator
 ```
+
+## 🗂️ Folder Organization Benefits
+
+The reorganized structure provides several advantages:
+
+### **Logical Separation**
+- **`managers/`**: All management components (data, position, risk, state)
+- **`utils/`**: Core utilities and handlers (signal processing, performance tracking)
+- **`exchanges/`**: Exchange-specific implementations and abstractions
+- **`strategy/`**: Trading strategy implementations
+- **`telegram/`**: Telegram bot integration
+- **`crypto_backtesting/`**: Complete backtesting framework
+
+### **Improved Maintainability**
+- ✅ **Clear separation of concerns**
+- ✅ **Easier to locate specific functionality**
+- ✅ **Reduced import complexity**
+- ✅ **Better code organization**
+
+### **Enhanced Scalability**
+- ✅ **Easy to add new exchanges** in `exchanges/`
+- ✅ **Simple strategy addition** in `strategy/`
+- ✅ **Modular management components** in `managers/`
+- ✅ **Extensible utility functions** in `utils/`
 
 ## 🚀 Bot Operation Flow
 
@@ -265,10 +299,11 @@ graph TB
         RM[Risk Manager<br/>Risk Control]
     end
     
-    subgraph "Data & State Management"
+    subgraph "Management Layer"
         DM[Data Manager<br/>Market Data]
         SM[State Manager<br/>Persistence]
         WS[WebSocket Manager<br/>Real-time Data]
+        PT[Performance Tracker<br/>Analytics]
     end
     
     subgraph "Analysis & Strategies"
@@ -384,61 +419,80 @@ The bot follows a specific initialization sequence to ensure all components are 
 
 ## 🔧 Core Components
 
-### 1. Trading Bot (`trading_bot.py`)
+### Core Trading System
+
+#### 1. Trading Bot (`trading_bot.py`)
 The main orchestrator that coordinates all system components:
 - Manages event loops for real-time processing
 - Coordinates signal generation and processing
 - Handles system initialization and shutdown
 - Provides Telegram command interface
 
-### 2. Crypto Handler (`crypto_handler.py`)
+#### 2. Crypto Handler (`utils/crypto_handler.py`)
 Unified interface for exchange operations:
 - Abstracts exchange-specific implementations
 - Handles order placement and management
 - Manages position tracking
 - Provides market data access
 
-### 3. Risk Manager (`crypto_risk_manager.py`)
-Comprehensive risk management system:
-- Position sizing calculations
-- Stop-loss and take-profit management
-- ATR-based risk calculations
-- Daily risk limits and monitoring
-
-### 4. Position Manager (`crypto_position_manager.py`)
-Advanced position management:
-- Real-time position tracking
-- Trailing stop management
-- Position modification capabilities
-- Risk monitoring and alerts
-
-### 5. Signal Processor (`crypto_signal_processor.py`)
+#### 3. Signal Processor (`utils/crypto_signal_processor.py`)
 Intelligent signal processing pipeline:
 - Signal validation and filtering
 - Market condition analysis
 - Trade execution coordination
 - Error handling and retry logic
 
-### 6. Data Manager (`crypto_data_manager.py`)
+### Management Layer
+
+#### 4. Risk Manager (`managers/crypto_risk_manager.py`)
+Comprehensive risk management system:
+- Position sizing calculations
+- Stop-loss and take-profit management
+- ATR-based risk calculations
+- Daily risk limits and monitoring
+
+#### 5. Position Manager (`managers/crypto_position_manager.py`)
+Advanced position management:
+- Real-time position tracking
+- Trailing stop management
+- Position modification capabilities
+- Risk monitoring and alerts
+
+#### 6. Data Manager (`managers/crypto_data_manager.py`)
 Centralized data management:
 - Real-time market data caching
 - Historical data management
 - Data synchronization across timeframes
 - Database operations
 
-### 7. State Manager (`crypto_state_manager.py`)
+#### 7. State Manager (`managers/crypto_state_manager.py`)
 Persistent state management:
 - Trade history tracking
 - System state persistence
 - Configuration management
 - Recovery mechanisms
 
-### 8. Performance Tracker (`crypto_performance_tracker.py`)
+#### 8. Performance Tracker (`utils/crypto_performance_tracker.py`)
 Comprehensive performance analytics:
 - Real-time P&L tracking
 - Trade statistics
 - Performance metrics calculation
 - Reporting and analysis
+
+### Infrastructure Components
+
+#### 9. WebSocket Manager (`utils/websocket_manager.py`)
+Real-time data management:
+- WebSocket connection management
+- Real-time price streaming
+- Connection health monitoring
+- Automatic reconnection handling
+
+#### 10. Exchange Layer (`exchanges/`)
+Exchange-specific implementations:
+- **Crypto Exchange** (`crypto_exchange.py`): Abstract base class
+- **Bybit Exchange** (`bybit_exchange.py`): Bybit-specific implementation
+- **Binance Exchange** (`binance_exchange.py`): Binance-specific implementation
 
 ## 📊 Trading Strategies
 
@@ -590,6 +644,34 @@ The system provides comprehensive monitoring through:
 - **Windows users**: Run `install_windows.bat` as Administrator if needed
 - **Linux/macOS users**: You may need to enter your password for system package installation
 - **Use `run_bot.bat` on Windows** for optimized bot execution with bytecode generation disabled
+
+### Import Issues After Reorganization
+
+If you encounter import errors after the folder reorganization:
+
+1. **Check import paths**: All imports have been updated to reflect the new structure
+2. **Verify `__init__.py` files**: Each folder now has proper `__init__.py` files
+3. **Clear Python cache**: Delete `__pycache__` folders if needed:
+   ```bash
+   find . -type d -name "__pycache__" -exec rm -rf {} +
+   ```
+4. **Test imports**: Use `python -c "from src.trading_bot import TradingBot; print('Success!')"` to verify
+
+### Folder Structure Changes
+
+The following files have been moved to new locations:
+
+| Old Location | New Location | Purpose |
+|-------------|-------------|---------|
+| `src/crypto_handler.py` | `src/utils/crypto_handler.py` | Core exchange handler |
+| `src/crypto_signal_processor.py` | `src/utils/crypto_signal_processor.py` | Signal processing |
+| `src/crypto_performance_tracker.py` | `src/utils/crypto_performance_tracker.py` | Performance tracking |
+| `src/websocket_manager.py` | `src/utils/websocket_manager.py` | WebSocket management |
+| `src/crypto_data_manager.py` | `src/managers/crypto_data_manager.py` | Data management |
+| `src/crypto_position_manager.py` | `src/managers/crypto_position_manager.py` | Position management |
+| `src/crypto_risk_manager.py` | `src/managers/crypto_risk_manager.py` | Risk management |
+| `src/crypto_state_manager.py` | `src/managers/crypto_state_manager.py` | State management |
+| `src/crypto_exchange.py` | `src/exchanges/crypto_exchange.py` | Exchange abstraction |
 
 ## 🤝 Contributing
 
