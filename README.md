@@ -1,335 +1,497 @@
-<div align="center">
-  <img src="assets/Quant.png" alt="Trading Bot Banner">
-</div>
-
-# 🤖 Quant Bot
-
-A sophisticated algorithmic trading system that integrates with MetaTrader 5 for automated Forex and synthetic indices trading.
-
-## Table of Contents
-- [Overview](#overview)
-- [✨ Key Features](#-key-features)
-- [🏗️ System Architecture](#-system-architecture)
-- [📈 Trading Strategies](#-trading-strategies)
-- [🛡️ Risk Management](#-risk-management)
-- [🚀 Installation](#-installation)
-- [⚙️ Configuration](#-configuration)
-- [▶️ Usage](#-usage)
-- [💬 Telegram Integration](#-telegram-integration)
-- [💻 Development](#-development)
-- [📜 License](#-license)
+# Quant-Bot-Crypto: Advanced Algorithmic Trading System
 
 ## Overview
 
-This Trading Bot is a comprehensive algorithmic trading system designed to connect to MetaTrader 5, analyze market data using various technical indicators, generate trading signals, and execute trades based on predefined risk management rules. The system supports multiple trading strategies and timeframes while providing real-time feedback through Telegram notifications.
-
-## ✨ Key Features
-
-- **🧠 Multi-Strategy Support**: Implements various trading strategies including trend following, breakout trading, and price action-based approaches.
-- **🛡️ Advanced Risk Management**: Sophisticated position sizing, drawdown controls, and account protection mechanisms.
-- **📈 Real-Time Market Analysis**: Processes market data across multiple timeframes for enhanced decision-making.
-- **💬 Telegram Integration**: Remote monitoring and control through Telegram messaging.
-- **⚡ Asynchronous Operation**: Efficiently handles multiple tasks simultaneously using asyncio.
-- **📝 Detailed Logging**: Comprehensive logging system for debugging and performance analysis.
-- **📊 Position Management**: Automated trailing stops and take-profit mechanisms.
-- **📉 Performance Tracking**: Tracks and reports trading performance metrics.
-- **🔧 Advanced Error Handling**: Automatically handles common broker errors like invalid stops and unsupported order-filling modes.
-- **🎯 Multi-Take-Profit Management**: Capable of managing trades with multiple take-profit levels, executing partial closes to secure profits incrementally.
-
-## 📊 Quant-Dash Dashboard
-
-This project includes a powerful web-based dashboard built with Next.js and Tailwind CSS for real-time monitoring and analytics.
-
-- **Visualize Performance**: Track your bot's performance with interactive charts and detailed metrics.
-- **Monitor Live Trades**: Keep an eye on all active trades in a clean, user-friendly interface.
-- **Review History**: Analyze historical trade data to refine your strategies.
-
-The dashboard runs separately and connects to the bot's API. For setup instructions and more details, please see the [Quant-Dash README](./Quant-Dash/README.md).
-
-The public repository for the dashboard can be found here: [https://github.com/Ethansi2947E/Quant-Dash](https://github.com/Ethansi2947E/Quant-Dash)
+Quant-Bot-Crypto is a sophisticated algorithmic trading system designed for cryptocurrency markets. Built with Python and featuring advanced risk management, multiple trading strategies, real-time data processing, and comprehensive backtesting capabilities, this system provides institutional-grade trading infrastructure for crypto markets.
 
 ## 🏗️ System Architecture
 
-### Flow Chart
+The system is built with a modular, event-driven architecture that separates concerns and enables easy extension and maintenance. The core components work together to provide:
+
+- **Real-time market data processing** via WebSocket connections
+- **Advanced trading strategies** with multiple signal generators
+- **Comprehensive risk management** with position sizing and stop-loss mechanisms
+- **Multi-exchange support** (Bybit, Binance)
+- **Telegram integration** for monitoring and control
+- **Backtesting framework** with Bayesian optimization
+- **Performance tracking** and analytics
+
+## 📁 Project Structure
+
+```
+src/
+├── crypto_backtesting/          # Backtesting framework
+│   ├── base_strategy.py         # Abstract base strategy class
+│   ├── bayesian_optimizer.py    # Bayesian parameter optimization
+│   ├── data_fetcher.py          # Historical data fetching
+│   ├── engine.py                # Backtesting engine
+│   ├── metrics_calculator.py    # Performance metrics
+│   ├── vwap_swing_strategy.py   # VWAP swing strategy
+│   └── volume_ma_backtest_adapter.py  # Strategy adapter
+├── exchanges/                   # Exchange implementations
+│   ├── binance_exchange.py     # Binance integration
+│   └── bybit_exchange.py       # Bybit integration
+├── strategy/                    # Trading strategies
+│   └── volume_ma_oscillator.py # Volume MA Oscillator strategy
+├── telegram/                   # Telegram bot integration
+│   ├── telegram_bot.py         # Main Telegram bot
+│   └── crypto_telegram_command_handler.py  # Command handlers
+├── utils/                      # Utility modules
+│   ├── logging_setup.py        # Logging configuration
+│   └── market_utils.py         # Market utilities
+├── crypto_data_manager.py      # Data management
+├── crypto_exchange.py          # Exchange abstraction
+├── crypto_handler.py           # Unified exchange handler
+├── crypto_performance_tracker.py  # Performance tracking
+├── crypto_position_manager.py  # Position management
+├── crypto_risk_manager.py      # Risk management
+├── crypto_signal_processor.py  # Signal processing
+├── crypto_state_manager.py     # State management
+├── trading_bot.py              # Main trading bot
+└── websocket_manager.py        # WebSocket management
+```
+
+## 🚀 Bot Operation Flow
+
+The following flowchart demonstrates how the crypto trading bot operates from startup to execution:
 
 ```mermaid
-flowchart TB
-    subgraph Config ["Configuration"]
-        Cfg[config/config.py]
-        Env[.env] --> |loads| Cfg
-    end
-
-    subgraph Main["Main Application"]
-        A[main.py] -- "uses" --> Cfg
-        A --> |initializes| B(TradingBot)
-        A -- "uses" --> LS[utils/logging_setup.py]
-    end
-
-    subgraph Core["Core Components"]
-        B --> |manages| C[src/mt5_handler.py]
-        B --> |uses| D[src/risk_manager.py]
-        B --> |communicates via| H[src/telegram/telegram_bot.py]
-    end
-
-    subgraph Utils["Utility Components"]
-        B --> |coordinates| E[utils/signal_processor.py]
-        B --> |tracks| F[utils/position_manager.py]
-        B --> |monitors| G[utils/performance_tracker.py]
-        B --> |manages data via| I[utils/data_manager.py]
-        B --> |uses for market info| J[utils/market_utils.py]
-    end
-
-    subgraph Strategies["Trading Strategies"]
-        E --> K(strategy/Supertrend.py)
-        K -- implements --> L((strategy/strategy_template.py))
-    end
-
-    subgraph External["External Systems"]
-        C <--> O[MetaTrader 5]
-        H <--> P[Telegram API]
-    end
-
-    subgraph Notes["Notes"]
-        Note0["logging_setup.py: Centralizes all Loguru configuration."]
-        Note1["MT5Handler: Includes enhanced error recovery and partial close logic."]
-        Note2["PositionManager: Actively manages multi-TP lifecycle."]
-        Note3["config.py: Purely declarative, no functions."]
-    end
+graph TD
+    A[Bot Startup] --> B[Load Configuration]
+    B --> C[Initialize Logging]
+    C --> D[Initialize Crypto Handler]
+    D --> E[Connect to Exchange]
+    E --> F[Initialize State Manager]
+    F --> G[Initialize Risk Manager]
+    G --> H[Initialize Position Manager]
+    H --> I[Initialize Signal Processor]
+    I --> J[Initialize Performance Tracker]
+    J --> K[Initialize Telegram Bot]
+    K --> L[Load Trading Symbols]
+    L --> M[Initialize Signal Generators]
+    M --> N[Start Data Manager]
+    N --> O[Start WebSocket Connections]
+    O --> P[Prime Last Candle Timestamps]
+    P --> Q[Start Main Event Loops]
+    
+    Q --> R[Live Tick Event Loop]
+    Q --> S[Candle Event Loop]
+    Q --> T[Trade Monitoring Loop]
+    Q --> U[Telegram Command Loop]
+    
+    R --> V[Process Real-time Ticks]
+    V --> W[Update Market Data]
+    W --> X[Generate Signals]
+    X --> Y[Process Signals]
+    Y --> Z[Execute Trades]
+    
+    S --> AA[Check for New Candles]
+    AA --> BB[Fetch Historical Data]
+    BB --> CC[Run Technical Analysis]
+    CC --> DD[Generate Trading Signals]
+    DD --> EE[Signal Processing Pipeline]
+    
+    EE --> FF[Validate Signal]
+    FF --> GG{Signal Valid?}
+    GG -->|Yes| HH[Check Risk Parameters]
+    GG -->|No| II[Log Rejected Signal]
+    
+    HH --> JJ{Risk Check Pass?}
+    JJ -->|Yes| KK[Calculate Position Size]
+    JJ -->|No| LL[Log Risk Violation]
+    
+    KK --> MM[Place Order]
+    MM --> NN{Order Success?}
+    NN -->|Yes| OO[Update Position Manager]
+    NN -->|No| PP[Log Order Error]
+    
+    OO --> QQ[Send Telegram Notification]
+    QQ --> RR[Update Performance Metrics]
+    RR --> SS[Monitor Position]
+    
+    SS --> TT[Check Stop Loss]
+    SS --> UU[Check Take Profit]
+    SS --> VV[Check Trailing Stop]
+    
+    TT --> WW{Stop Loss Hit?}
+    UU --> XX{Take Profit Hit?}
+    VV --> YY{Trailing Stop Triggered?}
+    
+    WW -->|Yes| ZZ[Close Position]
+    XX -->|Yes| ZZ
+    YY -->|Yes| ZZ
+    
+    ZZ --> AAA[Update P&L]
+    AAA --> BBB[Send Trade Notification]
+    BBB --> CCC[Update Performance Tracker]
+    CCC --> DDD[Log Trade History]
+    
+    T --> EEE[Monitor Open Positions]
+    EEE --> FFF[Check Exit Conditions]
+    FFF --> GGG[Update Position Data]
+    GGG --> HHH[Risk Management Checks]
+    
+    U --> III[Process Telegram Commands]
+    III --> JJJ[Execute Command]
+    JJJ --> KKK[Send Response]
+    
+    style A fill:#e1f5fe
+    style Q fill:#f3e5f5
+    style EE fill:#fff3e0
+    style ZZ fill:#e8f5e8
+    style III fill:#fce4ec
 ```
 
-### Component Description
+## 🏛️ Component Architecture Diagram
 
-1.  **`main.py`**: The application's entry point. It loads the environment, uses `logging_setup.py` to configure the global logger, reads the declarative configs from `config.py`, and initializes and runs the `TradingBot`.
+The following diagram shows how all major components interact within the system:
 
-2.  **`config/config.py`**: A purely declarative file containing all static configurations for the bot (MT5, Trading, Telegram, Risk). It contains **no functions** and is the single source of truth for all parameters.
+```mermaid
+graph TB
+    subgraph "Core Trading System"
+        TB[Trading Bot<br/>Main Orchestrator]
+        CH[Crypto Handler<br/>Exchange Interface]
+        SP[Signal Processor<br/>Trade Execution]
+        PM[Position Manager<br/>Position Tracking]
+        RM[Risk Manager<br/>Risk Control]
+    end
+    
+    subgraph "Data & State Management"
+        DM[Data Manager<br/>Market Data]
+        SM[State Manager<br/>Persistence]
+        WS[WebSocket Manager<br/>Real-time Data]
+    end
+    
+    subgraph "Analysis & Strategies"
+        SG[Signal Generators<br/>Trading Strategies]
+        VMA[Volume MA Oscillator]
+        VWAP[VWAP Swing Strategy]
+    end
+    
+    subgraph "Monitoring & Communication"
+        PT[Performance Tracker<br/>Analytics]
+        TG[Telegram Bot<br/>Notifications]
+        TCH[Telegram Commands<br/>Control Interface]
+    end
+    
+    subgraph "Exchange Layer"
+        BY[Bybit Exchange]
+        BN[Binance Exchange]
+    end
+    
+    subgraph "Backtesting Framework"
+        BF[Backtesting Engine]
+        BO[Bayesian Optimizer]
+        MC[Metrics Calculator]
+        DS[Data Fetcher]
+    end
+    
+    %% Core connections
+    TB --> CH
+    TB --> SP
+    TB --> PM
+    TB --> RM
+    TB --> DM
+    TB --> SM
+    TB --> PT
+    TB --> TG
+    
+    %% Signal processing flow
+    SG --> SP
+    VMA --> SG
+    VWAP --> SG
+    SP --> RM
+    SP --> PM
+    SP --> CH
+    
+    %% Data flow
+    DM --> SG
+    WS --> DM
+    CH --> DM
+    SM --> PT
+    
+    %% Exchange connections
+    CH --> BY
+    CH --> BN
+    
+    %% Telegram integration
+    TG --> TCH
+    TCH --> TB
+    TG --> PT
+    
+    %% Backtesting connections
+    BF --> BO
+    BF --> MC
+    BF --> DS
+    BF --> VMA
+    BF --> VWAP
+    
+    %% Risk management
+    RM --> PM
+    RM --> SP
+    RM --> CH
+    
+    %% Performance tracking
+    PT --> SM
+    PM --> PT
+    SP --> PT
+    
+    style TB fill:#e1f5fe
+    style SP fill:#fff3e0
+    style RM fill:#ffebee
+    style PT fill:#e8f5e8
+    style TG fill:#fce4ec
+```
 
-3.  **`utils/logging_setup.py`**: A dedicated utility that handles all logging configuration. It sets up `Loguru`, intercepts the standard Python logger, and configures console and file outputs based on settings in `config.py`.
+## 🚀 Detailed Startup Sequence
 
-4.  **TradingBot (`trading_bot.py`)**: The central orchestrator that manages the entire trading process, initializes components, and handles the main event loops.
+The bot follows a specific initialization sequence to ensure all components are properly configured:
 
-5.  **MT5Handler (`mt5_handler.py`)**: Manages the connection to MetaTrader 5, handles market data retrieval, and executes trading orders. It includes robust error handling to automatically adjust for broker-specific requirements (e.g., "invalid stops") and can execute **partial position closes**.
+### Phase 1: Core System Initialization
+1. **Configuration Loading**: Load settings from `config/config.py`
+2. **Logging Setup**: Initialize structured logging with Loguru
+3. **Crypto Handler**: Initialize exchange connection (Bybit/Binance)
+4. **State Manager**: Load persistent state and trade history
+5. **Risk Manager**: Initialize risk parameters and limits
 
-6.  **RiskManager (`risk_manager.py`)**: Handles position sizing, risk calculations, and implements trading limits. It performs a crucial final check, re-validating the risk-to-reward ratio *after* any automatic stop adjustments are made by the `MT5Handler` to ensure trade viability.
+### Phase 2: Trading Components Setup
+6. **Position Manager**: Initialize position tracking system
+7. **Signal Processor**: Setup signal validation and execution pipeline
+8. **Performance Tracker**: Initialize analytics and reporting
+9. **Data Manager**: Setup market data caching and synchronization
 
-7.  **SignalProcessor (`src/utils/signal_processor.py`)**: Processes raw signals from strategies, applies risk management rules, and, upon successful execution, **registers the new trade with the `PositionManager`** for lifecycle management.
+### Phase 3: Strategy and Analysis
+10. **Signal Generators**: Initialize trading strategies (Volume MA, VWAP Swing)
+11. **WebSocket Manager**: Establish real-time data connections
+12. **Telegram Bot**: Initialize notification and control system
 
-5.  **PositionManager (`src/utils/position_manager.py`)**: Monitors and manages all open positions. Its responsibilities include:
-    - Managing standard trailing stops.
-    - Tracking trades with multiple take-profit (TP) levels.
-    - Continuously monitoring market price against each TP level.
-    - Triggering partial closes via `MT5Handler` when a TP is hit.
-    - Updating the trade's state (e.g., remaining volume, next TP).
-    - Deregistering trades once they are fully closed.
+### Phase 4: Event Loop Activation
+13. **Prime Timestamps**: Load last candle timestamps for each symbol/timeframe
+14. **Start Event Loops**: Activate concurrent processing loops:
+    - Live tick processing
+    - Candle event monitoring
+    - Trade management
+    - Telegram command handling
 
-9.  **DataManager (`src/utils/data_manager.py`)**: Handles market data caching and preprocessing for efficient strategy execution.
+## 🔧 Core Components
 
-10. **MarketUtils (`src/utils/market_utils.py`)**: Provides helper functions for market-specific data, such as symbol information and contract sizes.
+### 1. Trading Bot (`trading_bot.py`)
+The main orchestrator that coordinates all system components:
+- Manages event loops for real-time processing
+- Coordinates signal generation and processing
+- Handles system initialization and shutdown
+- Provides Telegram command interface
 
-11. **TelegramBot (`src/telegram/telegram_bot.py`)**: Provides remote monitoring and control capabilities through Telegram messaging.
+### 2. Crypto Handler (`crypto_handler.py`)
+Unified interface for exchange operations:
+- Abstracts exchange-specific implementations
+- Handles order placement and management
+- Manages position tracking
+- Provides market data access
 
-12. **PerformanceTracker (`src/utils/performance_tracker.py`)**: Tracks and reports trading performance metrics.
+### 3. Risk Manager (`crypto_risk_manager.py`)
+Comprehensive risk management system:
+- Position sizing calculations
+- Stop-loss and take-profit management
+- ATR-based risk calculations
+- Daily risk limits and monitoring
 
-## Trading Strategies
+### 4. Position Manager (`crypto_position_manager.py`)
+Advanced position management:
+- Real-time position tracking
+- Trailing stop management
+- Position modification capabilities
+- Risk monitoring and alerts
 
-The system is designed to be modular, with strategies implementing a common template (`strategy_template.py`). The current primary strategy is:
+### 5. Signal Processor (`crypto_signal_processor.py`)
+Intelligent signal processing pipeline:
+- Signal validation and filtering
+- Market condition analysis
+- Trade execution coordination
+- Error handling and retry logic
 
-1.  **SuperTrendStrategy (`Supertrend.py`)**: A strategy centered around the Supertrend indicator, using a collection of other indicators for confirmation. It generates signals with multiple take-profit levels for sophisticated trade management.
+### 6. Data Manager (`crypto_data_manager.py`)
+Centralized data management:
+- Real-time market data caching
+- Historical data management
+- Data synchronization across timeframes
+- Database operations
 
-## Risk Management
+### 7. State Manager (`crypto_state_manager.py`)
+Persistent state management:
+- Trade history tracking
+- System state persistence
+- Configuration management
+- Recovery mechanisms
 
-The risk management system implements several layers of protection:
+### 8. Performance Tracker (`crypto_performance_tracker.py`)
+Comprehensive performance analytics:
+- Real-time P&L tracking
+- Trade statistics
+- Performance metrics calculation
+- Reporting and analysis
 
-- **Position Sizing**: Calculates appropriate lot sizes based on account balance and risk percentage
-- **Drawdown Protection**: Reduces position sizes or stops trading during drawdown periods
-- **Trade Validation**: Validates all trades against risk parameters before execution. This includes a final risk-to-reward ratio check *after* the broker's minimum stop requirements have been met and applied.
-- **Volatility Adjustment**: Adjusts position sizes based on market volatility
-- **Recovery Mode**: Implements conservative trading during recovery from drawdowns
-- **Daily/Weekly Limits**: Enforces limits on number of trades and maximum risk per day/week
+## 📊 Trading Strategies
 
-## 🚀 Installation
+### Volume MA Oscillator Strategy
+Advanced oscillator-based strategy featuring:
+- Volume-weighted moving averages
+- Multiple filter systems (trend, volume, RSI, ADX)
+- Configurable risk management
+- Hybrid trend/reversion modes
+
+### VWAP Swing Strategy
+Institutional-grade swing trading strategy:
+- Dynamic swing point detection
+- Anchored VWAP calculations
+- ADX trend filtering
+- Multi-timeframe analysis
+
+## 🔄 Backtesting Framework
+
+Comprehensive backtesting system with:
+- **Bayesian Optimization**: Automated parameter optimization using Gaussian processes
+- **Enhanced Metrics**: Advanced performance metrics including Sharpe, Sortino, Calmar ratios
+- **Multi-Symbol Testing**: Simultaneous optimization across multiple symbols/timeframes
+- **Strategy Adapters**: Easy integration of existing strategies
+
+## 📱 Telegram Integration
+
+Full Telegram bot integration providing:
+- Real-time trade notifications
+- Performance monitoring
+- Remote bot control
+- Command execution
+- Status reporting
+
+## 🛡️ Risk Management Features
+
+- **Position Sizing**: Kelly criterion and fixed percentage methods
+- **Stop Loss Management**: ATR-based and percentage-based stops
+- **Take Profit**: Risk-reward ratio management
+- **Trailing Stops**: Dynamic stop-loss adjustment
+- **Daily Limits**: Maximum daily loss and trade limits
+- **Correlation Analysis**: Portfolio risk assessment
+
+## 🔌 Exchange Support
+
+### Bybit Integration
+- Full futures trading support
+- WebSocket real-time data
+- Advanced order types
+- Position management
+
+### Binance Integration
+- Spot and futures trading
+- Comprehensive API coverage
+- Real-time data streams
+- Order management
+
+## 📈 Performance Monitoring
+
+Real-time performance tracking including:
+- P&L monitoring
+- Trade statistics
+- Risk metrics
+- Drawdown analysis
+- Win/loss ratios
+- Performance attribution
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- MetaTrader 5 terminal installed
-- An active MT5 account (demo or live)
-- A Telegram Bot token and your User ID (see [Telegram Integration](#telegram-integration))
+- Python 3.8+
+- Exchange API credentials
+- Telegram bot token
+- Required Python packages (see requirements.txt)
 
-### Automated Installation
-
-#### 🏁 For Windows Users
-The setup process is fully automated. Simply run the installer script:
-
-1.  **Run the Installer**: Double-click the `install_windows.bat` file.
-2.  **Follow the Prompts**: The script will guide you through creating a virtual environment and installing all necessary dependencies, including the tricky `TA-Lib` library.
-
-#### 🐧 For Linux & macOS Users
-A similar automated script is provided:
-
-1.  **Make the Script Executable**:
-    ```bash
-    chmod +x install_linux.sh
-    ```
-2.  **Run the Installer**:
-    ```bash
-    ./install_linux.sh
-    ```
-3.  **Follow the Prompts**: The script will guide you through installing `TA-Lib` and all other dependencies. You may be prompted for your password for system-level packages.
-
-### 🔄 Updating the Bot
-
-To update your bot to the latest version, simply run the `update.sh` script. This script will automatically download the latest code, rebuild the Docker image, and restart the bot for you.
-
+### Installation
 ```bash
-# On Linux/macOS or Windows (using Git Bash)
-./update.sh
-```
+# Clone the repository
+git clone <repository-url>
+cd Quant-Bot-Crypto
 
-## ⚙️ Configuration
+# Install dependencies
+pip install -r requirements.txt
 
-1. Create a `.env` file in the root directory with your MT5 and Telegram credentials:
-```
-MT5_SERVER=YourBrokerServerName
-MT5_LOGIN=YourLoginNumber
-MT5_PASSWORD=YourPassword
-TELEGRAM_BOT_TOKEN=YourTelegramBotToken
-TELEGRAM_ALLOWED_USERS=YourTelegramUserID
-```
+# Configure settings
+cp config/config.example.py config/config.py
+# Edit config.py with your API keys and settings
 
-2. Configure trading parameters in `config/config.py`:
-   - Symbols to trade
-   - Risk parameters
-   - Strategy-specific settings
-   - Telegram settings
-
-## ▶️ Usage
-
-### Starting the Bot
-
-Run the bot using:
-```bash
+# Run the bot
 python main.py
 ```
 
-For Windows users, you can use the provided batch file:
-```bash
-run_bot.bat
-```
+### Configuration
+Key configuration areas:
+- Exchange API credentials
+- Trading symbols and timeframes
+- Risk management parameters
+- Strategy settings
+- Telegram bot configuration
 
-### Telegram Commands
+## 🔧 Advanced Features
 
-Once the bot is running, you can control it via Telegram with the following commands:
+### Signal Processing Pipeline
+1. **Signal Generation**: Multiple strategies generate signals
+2. **Validation**: Signals are validated against market conditions
+3. **Risk Assessment**: Position sizing and risk calculations
+4. **Execution**: Orders are placed with proper risk management
+5. **Monitoring**: Continuous position and risk monitoring
 
-**📊 General & Status**
-- `/status` - Get a detailed overview of the bot's current status, including trading state, open positions, and account balance.
-- `/statustable` - View a concise, table-formatted summary of open positions.
-- `/performance` - Receive a comprehensive performance report with key trading metrics.
-- `/balance` - Get the current account balance, equity, and margin information.
-- `/metrics` - Display detailed trading metrics, such as win rate, profit factor, and drawdown.
-- `/history {days}` - Show the trade history for the last specified number of days (e.g., `/history 7`).
-- `/daily` - Get a summary of the current day's trading activity and P/L.
-- `/count` - Show the number of trades taken today, this week, and this month.
+### Event-Driven Architecture
+- **Live Tick Processing**: Real-time price updates
+- **Candle Events**: New candle detection and analysis
+- **Trade Events**: Position updates and management
+- **Command Events**: Telegram command processing
 
-**🕹️ Trading Control**
-- `/enable` - Enable the trading functionality. The bot will start processing signals and opening trades.
-- `/disable` - Disable trading. The bot will stop opening new trades but continue to manage existing ones.
-- `/listsignalgenerators` - List all available signal generation strategies.
-- `/setsignalgenerator {generator_name}` - Switch the active signal generation strategy.
+### Error Handling
+- Comprehensive error logging
+- Automatic retry mechanisms
+- Graceful degradation
+- Recovery procedures
 
-**🛡️ Risk & Position Management**
-- `/enabletrailingstop` - Enable the automated trailing stop loss for managed positions.
-- `/disabletrailingstop` - Disable the trailing stop loss.
-- `/enablepositionadditions` - Allow the bot to add to existing positions (pyramiding).
-- `/disablepositionadditions` - Prevent the bot from adding to existing positions.
+## 📊 Monitoring and Alerts
 
-**⚙️ Admin & Shutdown**
-- `/enablecloseonshutdown` - Configure the bot to automatically close all open positions upon shutdown.
-- `/disablecloseonshutdown` - Prevent the bot from closing positions upon shutdown.
-- `/shutdown` - Safely shut down the bot.
+The system provides comprehensive monitoring through:
+- Real-time Telegram notifications
+- Performance dashboards
+- Error alerts and warnings
+- Trade execution confirmations
+- Risk limit notifications
 
-## 💬 Telegram Integration
+## 🔒 Security Features
 
-The bot uses Telegram for remote monitoring and control. To set it up, you need a bot token and your personal user ID.
+- API key encryption
+- Secure WebSocket connections
+- Input validation and sanitization
+- Error message sanitization
+- Access control mechanisms
 
-### Step 1: Create a Bot with BotFather
+## 📚 Documentation
 
-1.  **Find BotFather**: Open your Telegram app and search for the official `@BotFather` bot (it has a blue checkmark).
-2.  **Start a New Bot**: Send the `/newbot` command to BotFather.
-3.  **Name Your Bot**: Follow the prompts to give your bot a user-friendly name (e.g., "My Trading Assistant").
-4.  **Set a Username**: Choose a unique username for your bot, which must end in "bot" (e.g., `MyTradingAssistantBot`).
-5.  **Save Your Token**: BotFather will provide you with an **API Token**. This is a secret key required for the bot to function. Copy it immediately and keep it safe. You will need it for the `.env` file.
+- Comprehensive code documentation
+- Strategy development guides
+- API reference
+- Configuration examples
+- Troubleshooting guides
 
-### Step 2: Find Your Telegram User ID
+## 🤝 Contributing
 
-To ensure only you can control the bot, you must provide your unique Telegram User ID.
+This is a professional trading system. Contributions should:
+- Follow established coding standards
+- Include comprehensive tests
+- Maintain backward compatibility
+- Include proper documentation
 
-1.  **Find UserInfo Bot**: In Telegram, search for a bot like `@userinfobot`.
-2.  **Get Your ID**: Start a chat with the bot and it will immediately reply with your User ID (it's a long number).
-3.  **Save Your ID**: Copy this ID. You will need it for the `.env` file.
+## ⚠️ Disclaimer
 
-### Step 3: Configure the Bot
+This software is for educational and research purposes. Trading cryptocurrencies involves substantial risk of loss. Past performance does not guarantee future results. Always test thoroughly in a simulated environment before live trading.
 
-1.  Add the **API Token** and **User ID** you just obtained to your `.env` file:
-    ```
-    TELEGRAM_BOT_TOKEN=YourAPITokenFromBotFather
-    TELEGRAM_ALLOWED_USERS=YourUserIDFromUserInfoBot
-    ```
-2.  Start the trading bot. You can now communicate with it from your Telegram account.
+## 📄 License
 
-## 📂 Project Structure
-```
-Trading_Bot/
-├── config/                   # Configuration files
-│   ├── __init__.py
-│   └── config.py            # Main configuration (declarative only)
-├── src/                      # Source code
-│   ├── mt5_handler.py       # MetaTrader 5 interface
-│   ├── trading_bot.py       # Main bot orchestrator
-│   ├── risk_manager.py      # Risk management
-│   ├── strategy/            # Trading strategies
-│   │   ├── __init__.py
-│   │   ├── Supertrend.py        # Supertrend-based signal strategy
-│   │   └── strategy_template.py # Base template for new strategies
-│   ├── telegram/            # Telegram integration
-│   │   ├── telegram_bot.py
-│   │   └── telegram_command_handler.py
-│   ├── utils/               # Utility functions
-│   │   ├── __init__.py
-│   │   ├── data_manager.py
-│   │   ├── logging_setup.py   # Centralized logging configuration
-│   │   ├── market_utils.py
-│   │   ├── performance_tracker.py
-│   │   ├── position_manager.py
-│   │   └── signal_processor.py
-├── exports/                 # Exported data and reports
-├── main.py                  # Entry point
-├── requirements.txt         # Package dependencies
-├── run_bot.bat              # Windows startup script
-├── install_windows.bat      # Windows automated installer
-├── install_linux.sh         # Linux/macOS automated installer
-├── update.sh                # Universal update script
-├── Dockerfile               # Instructions to build the Docker image
-├── docker-compose.yml       # Docker Compose configuration
-├── .dockerignore            # Files to exclude from the Docker image
-└── README.md                # This file
-```
+[License information]
 
-## 💻 Development
+---
 
-### Extending the Bot
-
-#### Adding a New Strategy
-
-1. Create a new strategy file in the `src/strategy/` directory
-2. Extend the `SignalGenerator` class
-3. Implement the `generate_signals()` method
-4. Add the strategy to the list in `config.py`
-
-#### Custom Risk Management
-
-Modify the `RiskManager` class in `src/risk_manager.py` to implement custom risk management rules.
-
-## 📜 License
-
-This project is licensed under the MIT License. 
-
-#   Q u a n t - b o t - C R Y P T O  
- 
+**Quant-Bot-Crypto** - Professional algorithmic trading for cryptocurrency markets.
