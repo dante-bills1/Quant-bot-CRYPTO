@@ -173,7 +173,7 @@ class VolumeMAOscillator(SignalGenerator):
     ) -> List[Dict]:
         """Generate trading signals based on Volume MA Oscillator."""
         try:
-            if not market_data:
+            if market_data is None:
                 return []
             
             signals = []
@@ -202,11 +202,21 @@ class VolumeMAOscillator(SignalGenerator):
                 if df is None or df.empty or len(df) < self.min_candles:
                     return []
                 
+                # Clean DataFrame index - remove NaT values
+                df_clean = df.copy()
+                if hasattr(df_clean.index, 'isna'):
+                    # Remove rows with NaT index values
+                    valid_mask = ~df_clean.index.isna()
+                    df_clean = df_clean[valid_mask]
+                
+                if len(df_clean) < self.min_candles:
+                    return []
+                
                 # Calculate indicators
-                indicators = self._calculate_indicators(df)
+                indicators = self._calculate_indicators(df_clean)
                 
                 # Check for signals
-                signal = self._check_signal(df, indicators, symbol or "UNKNOWN")
+                signal = self._check_signal(df_clean, indicators, symbol or "UNKNOWN")
                 if signal:
                     signals.append(signal)
             
@@ -425,7 +435,14 @@ class VolumeMAOscillator(SignalGenerator):
         """Create a trading signal."""
         try:
             current_price = float(df["close"].iloc[-1])
-            timestamp = int(df.index[-1].timestamp() * 1000)
+            
+            # Handle timestamp safely - check if it's NaT or valid datetime
+            index_value = df.index[-1]
+            if pd.isna(index_value) or pd.isnull(index_value):
+                # Use current time if index is NaT
+                timestamp = int(pd.Timestamp.now().timestamp() * 1000)
+            else:
+                timestamp = int(index_value.timestamp() * 1000)
             
             # Calculate stop loss and take profit
             sl_distance = self.params.sl_atr_mult * atr
