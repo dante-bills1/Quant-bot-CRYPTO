@@ -401,34 +401,110 @@ Real-time performance tracking including:
 
 ### Prerequisites
 - Python 3.8+
-- Exchange API credentials
+- Exchange API credentials (Bybit/Binance)
 - Telegram bot token
 - Required Python packages (see requirements.txt)
 
-### Installation
+### Quick Installation
+
+The project includes automated installation scripts for different platforms:
+
+#### Windows Installation
+```bash
+# Run the automated Windows installer
+install_windows.bat
+
+# The script will:
+# 1. Check for Python installation
+# 2. Create virtual environment (.venv)
+# 3. Download and install TA-Lib
+# 4. Install all dependencies from requirements.txt
+```
+
+#### Linux/macOS Installation
+```bash
+# Make the script executable
+chmod +x install_linux.sh
+
+# Run the automated installer
+./install_linux.sh
+
+# The script will:
+# 1. Check for Python 3 installation
+# 2. Create virtual environment (.venv)
+# 3. Install TA-Lib (with system dependencies)
+# 4. Install all dependencies from requirements.txt
+```
+
+### Manual Installation (Alternative)
+If you prefer manual installation:
+
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd Quant-Bot-Crypto
 
-# Install dependencies
-pip install -r requirements.txt
+# Create virtual environment
+python -m venv .venv
 
-# Configure settings
-cp config/config.example.py config/config.py
-# Edit config.py with your API keys and settings
+# Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+source .venv/bin/activate
+
+# Install TA-Lib (platform-specific)
+# Windows: Download wheel from https://github.com/cgohlke/talib-build/releases
+# Linux: sudo apt-get install libta-lib-dev && pip install TA-Lib
+# macOS: brew install ta-lib && pip install TA-Lib
+
+# Install other dependencies
+pip install -r requirements.txt
+```
+
+### Configuration
+1. **Copy configuration template**:
+   ```bash
+   cp config/config.example.py config/config.py
+   ```
+
+2. **Edit `config/config.py`** with your settings:
+   - Exchange API credentials (Bybit/Binance)
+   - Telegram bot token and chat IDs
+   - Trading symbols and timeframes
+   - Risk management parameters
+   - Strategy settings
+
+### Running the Bot
+
+#### Windows
+```bash
+# Using the provided batch file (recommended)
+run_bot.bat
+
+# Or manually
+python main.py
+```
+
+#### Linux/macOS
+```bash
+# Activate virtual environment first
+source .venv/bin/activate
 
 # Run the bot
 python main.py
 ```
 
-### Configuration
-Key configuration areas:
-- Exchange API credentials
-- Trading symbols and timeframes
-- Risk management parameters
-- Strategy settings
-- Telegram bot configuration
+### Available Scripts
+
+| Script | Platform | Purpose |
+|--------|----------|---------|
+| `install_windows.bat` | Windows | Automated installation with TA-Lib |
+| `install_linux.sh` | Linux/macOS | Automated installation with dependencies |
+| `run_bot.bat` | Windows | Run bot with optimized settings |
+| `run_api.bat` | Windows | Run API server (if available) |
+| `update.bat` | Windows | Update dependencies |
+| `update.sh` | Linux/macOS | Update dependencies |
 
 ## 🔧 Advanced Features
 
@@ -475,6 +551,44 @@ The system provides comprehensive monitoring through:
 - API reference
 - Configuration examples
 - Troubleshooting guides
+
+## 🔧 Troubleshooting
+
+### Common Installation Issues
+
+#### TA-Lib Installation Problems
+- **Windows**: The `install_windows.bat` script automatically downloads the correct TA-Lib wheel
+- **Linux**: Run `sudo apt-get install libta-lib-dev build-essential` before running `install_linux.sh`
+- **macOS**: Install Homebrew first, then run `brew install ta-lib` before `install_linux.sh`
+
+#### Virtual Environment Issues
+- Always activate the virtual environment before running the bot:
+  - Windows: `.venv\Scripts\activate`
+  - Linux/macOS: `source .venv/bin/activate`
+
+#### Permission Issues (Linux/macOS)
+- Make installation script executable: `chmod +x install_linux.sh`
+- Ensure Python 3.8+ is installed and accessible
+
+### Running Issues
+
+#### Bot Won't Start
+1. Check configuration: Ensure `config/config.py` is properly configured
+2. Verify API credentials are valid
+3. Check internet connection for exchange API access
+4. Review logs for specific error messages
+
+#### Exchange Connection Problems
+- Verify API keys have correct permissions
+- Check if exchange is accessible from your location
+- Ensure API keys are not expired or rate-limited
+
+### Script Usage Tips
+
+- **Always run installation scripts from the project root directory**
+- **Windows users**: Run `install_windows.bat` as Administrator if needed
+- **Linux/macOS users**: You may need to enter your password for system package installation
+- **Use `run_bot.bat` on Windows** for optimized bot execution with bytecode generation disabled
 
 ## 🤝 Contributing
 
