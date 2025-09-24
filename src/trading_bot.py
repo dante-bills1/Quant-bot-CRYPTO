@@ -12,15 +12,15 @@ import copy
 import pandas as pd
 
 # Crypto Trading Bot - No MT5 dependencies
-from src.crypto_handler import CryptoHandler
-from src.crypto_risk_manager import CryptoRiskManager
+from src.utils.crypto_handler import CryptoHandler
+from src.managers.crypto_risk_manager import CryptoRiskManager
 from src.telegram.telegram_bot import TelegramBot
 from src.telegram.crypto_telegram_command_handler import CryptoTelegramCommandHandler
-from src.crypto_position_manager import CryptoPositionManager
+from src.managers.crypto_position_manager import CryptoPositionManager
 from src.crypto_signal_processor import CryptoSignalProcessor
-from src.crypto_performance_tracker import CryptoPerformanceTracker
-from src.crypto_data_manager import CryptoDataManager
-from src.crypto_state_manager import get_crypto_state_manager
+from src.utils.crypto_performance_tracker import CryptoPerformanceTracker
+from src.managers.crypto_data_manager import CryptoDataManager
+from src.managers.crypto_state_manager import get_crypto_state_manager
 
 
 # Define a base SignalGenerator class if it doesn't exist elsewhere

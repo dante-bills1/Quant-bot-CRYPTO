@@ -11,9 +11,9 @@ from loguru import logger
 import time
 
 from src.telegram.telegram_bot import TelegramBot
-from src.crypto_handler import CryptoHandler
+from src.utils.crypto_handler import CryptoHandler
 from src.utils.market_utils import calculate_tick_value, convert_price_to_ticks
-from src.crypto_risk_manager import CryptoRiskManager
+from src.managers.crypto_risk_manager import CryptoRiskManager
 
 class CryptoPositionManager:
     """

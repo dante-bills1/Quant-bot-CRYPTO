@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any, Tuple, Callable
 import pandas as pd
 from loguru import logger
 
-from src.crypto_exchange import (
+from src.exchanges.crypto_exchange import (
     CryptoExchange, ExchangeFactory, Order, Position, Balance, Ticker,
     OrderType, OrderSide, OrderStatus
 )
