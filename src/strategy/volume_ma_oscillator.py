@@ -339,7 +339,7 @@ class VolumeMAOscillator(SignalGenerator):
         """
         try:
             # Import risk manager here to avoid circular imports
-            from src.crypto_risk_manager import get_crypto_risk_manager
+            from src.managers.crypto_risk_manager import get_crypto_risk_manager
 
             risk_manager = get_crypto_risk_manager()
             return risk_manager.calculate_atr(df, n)
