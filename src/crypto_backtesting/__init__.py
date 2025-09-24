@@ -9,6 +9,7 @@ Based on the reference VWAP swing strategy implementation.
 from .data_fetcher import CryptoDataFetcher, create_data_fetcher
 from .base_strategy import CryptoBacktestStrategy, strategy_registry, register_strategy
 from .vwap_swing_strategy import VWAPSwingADXStrategy
+from .volume_ma_backtest_adapter import VolumeMABacktestAdapter, create_adapted_volume_ma_strategy
 from .bayesian_optimizer import BayesianOptimizer, MultiSymbolBayesianOptimizer
 from .metrics_calculator import EnhancedMetricsCalculator
 from .main import (
@@ -27,6 +28,7 @@ __all__ = [
     "CryptoDataFetcher",
     "CryptoBacktestStrategy",
     "VWAPSwingADXStrategy",
+    "VolumeMABacktestAdapter",
     "BayesianOptimizer",
     "MultiSymbolBayesianOptimizer",
     "EnhancedMetricsCalculator",
@@ -34,6 +36,7 @@ __all__ = [
     # Utility functions
     "create_data_fetcher",
     "register_strategy",
+    "create_adapted_volume_ma_strategy",
 
     # Main execution functions
     "run_single_backtest",
