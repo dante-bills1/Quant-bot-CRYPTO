@@ -235,6 +235,9 @@ class UniversalDataManager:
             
             # Convert to DataFrame and save
             df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            
+            # Ensure the output directory exists
+            output_file.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(output_file, index=False)
             
             logger.info(f"Data downloaded and saved: {output_file}")
