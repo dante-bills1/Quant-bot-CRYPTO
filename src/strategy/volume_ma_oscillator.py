@@ -56,8 +56,11 @@ class VolumeMAOscillator(SignalGenerator):
     def __init__(
         self,
         primary_timeframe: str = "4h",
+        secondary_timeframes: List[str] = None,
         risk_percent: float = 2.0,
         min_risk_reward: float = 1.0,
+        use_trend_filter: bool = False,
+        trend_timeframe: str = "1d",
         **kwargs
     ):
         """
@@ -65,8 +68,11 @@ class VolumeMAOscillator(SignalGenerator):
         
         Args:
             primary_timeframe: Primary timeframe for the strategy
+            secondary_timeframes: Optional secondary timeframes for multi-TF analysis
             risk_percent: Risk percentage per trade
             min_risk_reward: Minimum risk-reward ratio
+            use_trend_filter: Whether to use higher timeframe trend filter
+            trend_timeframe: Timeframe to use for trend filtering
             **kwargs: Additional parameters
         """
         super().__init__(**kwargs)
@@ -74,8 +80,17 @@ class VolumeMAOscillator(SignalGenerator):
         self.name = "Volume MA Oscillator"
         self.version = "1.0.0"
         self.primary_timeframe = primary_timeframe
+        self.secondary_timeframes = secondary_timeframes or []
         self.risk_percent = risk_percent
         self.min_risk_reward = min_risk_reward
+        
+        # Multi-timeframe configuration
+        self.use_trend_filter = use_trend_filter
+        self.trend_timeframe = trend_timeframe
+        
+        # Add trend timeframe to secondary timeframes if using trend filter
+        if self.use_trend_filter and self.trend_timeframe not in self.secondary_timeframes:
+            self.secondary_timeframes.append(self.trend_timeframe)
         
         # Strategy parameters
         self.params = VolumeMAOscillatorParams()
@@ -155,10 +170,46 @@ class VolumeMAOscillator(SignalGenerator):
         try:
             self._load_timeframe_profile()
             logger.success(f"Volume MA Oscillator initialized for {self.primary_timeframe}")
+            if self.use_trend_filter:
+                logger.info(f"Trend filter enabled using {self.trend_timeframe} timeframe")
             return True
         except Exception as e:
             logger.error(f"Failed to initialize Volume MA Oscillator: {e}")
             return False
+    
+    def _check_trend_direction(self, trend_data: pd.DataFrame) -> str:
+        """
+        Check trend direction using higher timeframe data.
+        
+        Args:
+            trend_data: DataFrame with OHLCV data for trend timeframe
+            
+        Returns:
+            "bullish", "bearish", or "neutral"
+        """
+        try:
+            if trend_data is None or len(trend_data) < 20:
+                return "neutral"
+            
+            # Simple trend detection using EMA slope
+            ema_period = 20
+            ema = trend_data['close'].ewm(span=ema_period).mean()
+            
+            # Calculate EMA slope over last 5 periods
+            recent_ema = ema.tail(5)
+            slope = (recent_ema.iloc[-1] - recent_ema.iloc[0]) / recent_ema.iloc[0]
+            
+            # Determine trend direction
+            if slope > 0.005:  # 0.5% threshold
+                return "bullish"
+            elif slope < -0.005:  # -0.5% threshold
+                return "bearish"
+            else:
+                return "neutral"
+                
+        except Exception as e:
+            logger.error(f"Error checking trend direction: {e}")
+            return "neutral"
     
     async def generate_signals(
         self,
@@ -232,7 +283,7 @@ class VolumeMAOscillator(SignalGenerator):
                     short_cond = indicators.get("short_cond", pd.Series(False, index=recent_df.index))
                     logger.debug(f"Long condition: {long_cond.iloc[-1] if len(long_cond) > 0 else 'No data'}, Short condition: {short_cond.iloc[-1] if len(short_cond) > 0 else 'No data'}")
 
-                    signal = self._check_signal(recent_df, indicators, symbol or "UNKNOWN")
+                    signal = self._check_signal(recent_df, indicators, symbol or "UNKNOWN", market_data)
                     if signal:
                         logger.info(f"Generated signal from single row: {signal}")
                         signals.append(signal)
@@ -261,7 +312,7 @@ class VolumeMAOscillator(SignalGenerator):
 
                     # Check for signals
                     logger.debug(f"Checking signals for {sym} with {len(df)} data points")
-                    signal = self._check_signal(df, indicators, sym)
+                    signal = self._check_signal(df, indicators, sym, market_data)
                     if signal:
                         logger.info(f"Generated signal: {signal}")
                         signals.append(signal)
@@ -278,7 +329,7 @@ class VolumeMAOscillator(SignalGenerator):
                 indicators = self._calculate_indicators(df)
 
                 # Check for signals
-                signal = self._check_signal(df, indicators, symbol or "UNKNOWN")
+                signal = self._check_signal(df, indicators, symbol or "UNKNOWN", market_data)
                 if signal:
                     signals.append(signal)
 
@@ -480,8 +531,8 @@ class VolumeMAOscillator(SignalGenerator):
         """Check for crossunder between two series."""
         return (a.shift(1) >= b.shift(1)) & (a < b)
     
-    def _check_signal(self, df: pd.DataFrame, indicators: Dict[str, pd.Series], symbol: str) -> Optional[Dict]:
-        """Check for trading signals."""
+    def _check_signal(self, df: pd.DataFrame, indicators: Dict[str, pd.Series], symbol: str, market_data: Dict = None) -> Optional[Dict]:
+        """Check for trading signals with optional trend filtering."""
         try:
             if not indicators or len(df) < 2:
                 return None
@@ -493,17 +544,72 @@ class VolumeMAOscillator(SignalGenerator):
             
             # Check for long signal
             if long_cond.iloc[-1] and not long_cond.iloc[-2]:
-                return self._create_signal(df, "buy", atr.iloc[-1], symbol)
+                signal = self._create_signal(df, "buy", atr.iloc[-1], symbol)
+                if self._is_signal_allowed_by_trend(signal, market_data, symbol):
+                    return signal
             
             # Check for short signal
             if short_cond.iloc[-1] and not short_cond.iloc[-2]:
-                return self._create_signal(df, "sell", atr.iloc[-1], symbol)
+                signal = self._create_signal(df, "sell", atr.iloc[-1], symbol)
+                if self._is_signal_allowed_by_trend(signal, market_data, symbol):
+                    return signal
             
             return None
             
         except Exception as e:
             logger.error(f"Error checking signal: {e}")
             return None
+    
+    def _is_signal_allowed_by_trend(self, signal: Dict, market_data: Dict, symbol: str) -> bool:
+        """
+        Check if signal is allowed by trend filter.
+        
+        Args:
+            signal: Signal dictionary
+            market_data: Market data dictionary
+            symbol: Trading symbol
+            
+        Returns:
+            True if signal is allowed by trend filter
+        """
+        try:
+            # If trend filter is disabled, allow all signals
+            if not self.use_trend_filter:
+                return True
+            
+            # Get trend data
+            if not market_data or symbol not in market_data:
+                logger.warning(f"No market data for trend filtering: {symbol}")
+                return True  # Allow signal if no trend data
+            
+            symbol_data = market_data[symbol]
+            trend_data = symbol_data.get(self.trend_timeframe)
+            
+            if trend_data is None:
+                logger.warning(f"No trend data for {self.trend_timeframe} timeframe")
+                return True  # Allow signal if no trend data
+            
+            # Check trend direction
+            trend_direction = self._check_trend_direction(trend_data)
+            signal_action = signal.get('action', '').lower()
+            
+            # Allow signals that align with trend
+            if trend_direction == "bullish" and signal_action == "buy":
+                logger.debug(f"✅ Long signal allowed by bullish trend on {self.trend_timeframe}")
+                return True
+            elif trend_direction == "bearish" and signal_action == "sell":
+                logger.debug(f"✅ Short signal allowed by bearish trend on {self.trend_timeframe}")
+                return True
+            elif trend_direction == "neutral":
+                logger.debug(f"⚠️ Signal allowed due to neutral trend on {self.trend_timeframe}")
+                return True
+            else:
+                logger.debug(f"❌ {signal_action} signal blocked by {trend_direction} trend on {self.trend_timeframe}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error checking trend filter: {e}")
+            return True  # Allow signal if trend check fails
     
     def _create_signal(self, df: pd.DataFrame, direction: str, atr: float, symbol: str) -> Dict:
         """Create a trading signal."""

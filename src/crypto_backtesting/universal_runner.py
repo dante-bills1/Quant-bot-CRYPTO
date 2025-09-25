@@ -57,6 +57,7 @@ class BacktestConfig:
     optimize: bool = False
     optimization_calls: int = 50
     output_dir: str = "results"
+    secondary_timeframe: Optional[str] = None  # Optional secondary timeframe for multi-timeframe strategies
 
 
 @dataclass
@@ -271,7 +272,7 @@ class UniversalBacktestRunner:
             strategy_class = self.registry.get_strategy_class(config.strategy_name)
             strategy_info = self.registry.get_strategy_info(config.strategy_name)
             
-            # Get data
+            # Get primary data
             data = await self.data_manager.get_data(
                 config.symbol, 
                 config.timeframe, 
@@ -282,7 +283,22 @@ class UniversalBacktestRunner:
             if data is None or len(data) == 0:
                 raise ValueError("No data available for backtesting")
             
-            logger.info(f"📈 Loaded {len(data)} data points")
+            logger.info(f"📈 Loaded {len(data)} data points for primary timeframe {config.timeframe}")
+            
+            # Get secondary timeframe data if specified
+            secondary_data = None
+            if config.secondary_timeframe:
+                logger.info(f"📊 Loading secondary timeframe data: {config.secondary_timeframe}")
+                secondary_data = await self.data_manager.get_data(
+                    config.symbol, 
+                    config.secondary_timeframe, 
+                    config.days, 
+                    config.force_download
+                )
+                if secondary_data is not None and len(secondary_data) > 0:
+                    logger.info(f"📈 Loaded {len(secondary_data)} data points for secondary timeframe {config.secondary_timeframe}")
+                else:
+                    logger.warning(f"⚠️ No secondary timeframe data available for {config.secondary_timeframe}")
             
             # Initialize strategy with default parameters
             strategy = strategy_class(primary_timeframe=config.timeframe)

@@ -1,0 +1,38 @@
+{
+    "exchange": {
+        "name": "bybit",
+        "api_key": "your_api_key_here",
+        "api_secret": "your_api_secret_here",
+        "testnet": true
+    },
+    "trading": {
+        "symbols": ["BTC/USDT", "ETH/USDT"],
+        "timeframes": ["1h", "4h", "1d"],
+        "execution_mode": "bar",
+        "check_interval": 60
+    },
+    "signal_generators": [
+        {
+            "name": "MultiTimeframeTrendFollowing",
+            "primary_timeframe": "1h",
+            "secondary_timeframes": ["4h"],
+            "trend_ema_period": 50,
+            "entry_ema_fast": 12,
+            "entry_ema_slow": 26,
+            "rsi_period": 14,
+            "rsi_overbought": 70,
+            "rsi_oversold": 30,
+            "stop_loss_pct": 0.02,
+            "take_profit_pct": 0.04
+        }
+    ],
+    "risk_management": {
+        "max_positions": 5,
+        "risk_per_trade": 0.02,
+        "max_daily_loss": 0.05
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/multi_timeframe_trading.log"
+    }
+}

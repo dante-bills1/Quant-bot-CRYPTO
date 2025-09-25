@@ -46,14 +46,24 @@ class SignalGenerator:
         else:
             logger.warning(f"No CryptoHandler passed to {self.name} - this might cause connection issues")
        
+        # Timeframe configuration
         self.primary_timeframe = None  # Subclasses must override
+        self.secondary_timeframes = []  # Optional secondary timeframes for multi-TF analysis
+        self.required_timeframes = []  # All timeframes this strategy needs (auto-populated)
+        
+        # Multi-timeframe data cache
+        self._multi_tf_data_cache = {}
         
     async def initialize(self):
         """
         Initialize the signal generator with any necessary setup.
         Override in subclasses for specific initialization.
         """
-        logger.debug(f"Base initialization for {self.name}")
+        # Auto-populate required_timeframes from primary and secondary timeframes
+        self.required_timeframes = [self.primary_timeframe] + self.secondary_timeframes
+        self.required_timeframes = list(set(self.required_timeframes))  # Remove duplicates
+        
+        logger.debug(f"Base initialization for {self.name} - Required timeframes: {self.required_timeframes}")
         return True
         
     async def generate_signals(self, market_data=None, symbol=None, timeframe=None):
@@ -70,6 +80,63 @@ class SignalGenerator:
         """
         logger.warning(f"Base generate_signals method called for {self.name}. This should be overridden.")
         return []
+    
+    def get_multi_timeframe_data(self, symbol: str, data_manager) -> Dict[str, pd.DataFrame]:
+        """
+        Get multi-timeframe data for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            data_manager: CryptoDataManager instance
+            
+        Returns:
+            Dictionary mapping timeframes to DataFrames
+        """
+        multi_tf_data = {}
+        
+        for tf in self.required_timeframes:
+            if tf:
+                data = data_manager.get_market_data(symbol, tf)
+                if data is not None and not data.empty:
+                    multi_tf_data[tf] = data
+                else:
+                    logger.warning(f"No data available for {symbol} {tf}")
+        
+        return multi_tf_data
+    
+    def get_primary_timeframe_data(self, symbol: str, data_manager) -> Optional[pd.DataFrame]:
+        """
+        Get primary timeframe data for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            data_manager: CryptoDataManager instance
+            
+        Returns:
+            DataFrame for primary timeframe or None
+        """
+        if not self.primary_timeframe:
+            return None
+            
+        return data_manager.get_market_data(symbol, self.primary_timeframe)
+    
+    def get_secondary_timeframe_data(self, symbol: str, timeframe: str, data_manager) -> Optional[pd.DataFrame]:
+        """
+        Get secondary timeframe data for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Specific secondary timeframe
+            data_manager: CryptoDataManager instance
+            
+        Returns:
+            DataFrame for secondary timeframe or None
+        """
+        if timeframe not in self.secondary_timeframes:
+            logger.warning(f"Timeframe {timeframe} not in secondary timeframes: {self.secondary_timeframes}")
+            return None
+            
+        return data_manager.get_market_data(symbol, timeframe)
         
     async def close(self):
         """
