@@ -1,48 +1,39 @@
 """
 Crypto Backtesting Framework
 
-A comprehensive backtesting framework for crypto trading strategies,
-featuring Bayesian optimization, advanced metrics, and VWAP swing strategies.
-Based on the reference VWAP swing strategy implementation.
+A core backtesting framework for crypto trading strategies,
+featuring advanced metrics, data management, and strategy execution.
 """
 
 from .data_fetcher import CryptoDataFetcher, create_data_fetcher
+from .data_loader import load_crypto_historical_data, validate_data_quality
 from .base_strategy import CryptoBacktestStrategy, strategy_registry, register_strategy
-from .vwap_swing_strategy import VWAPSwingADXStrategy
-from .volume_ma_backtest_adapter import VolumeMABacktestAdapter, create_adapted_volume_ma_strategy
-from .bayesian_optimizer import BayesianOptimizer, MultiSymbolBayesianOptimizer
 from .metrics_calculator import EnhancedMetricsCalculator
-from .main import (
-    run_single_backtest,
-    run_bayesian_optimization,
-    run_multi_symbol_optimization,
-    demonstrate_framework
-)
+from .visualizer import BacktestVisualizer, create_visualizer
+from .universal_runner import UniversalBacktestRunner, BacktestConfig, UniversalStrategyRegistry
 
 __version__ = "1.0.0"
 __author__ = "Quant-Bot-Crypto Framework"
-__description__ = "Advanced crypto backtesting framework with Bayesian optimization"
+__description__ = "Core crypto backtesting framework"
 
 __all__ = [
     # Core classes
     "CryptoDataFetcher",
-    "CryptoBacktestStrategy",
-    "VWAPSwingADXStrategy",
-    "VolumeMABacktestAdapter",
-    "BayesianOptimizer",
-    "MultiSymbolBayesianOptimizer",
+    "CryptoBacktestStrategy", 
     "EnhancedMetricsCalculator",
+    "BacktestVisualizer",
+    "UniversalBacktestRunner",
+    "UniversalStrategyRegistry",
+
+    # Configuration
+    "BacktestConfig",
 
     # Utility functions
     "create_data_fetcher",
+    "load_crypto_historical_data",
+    "validate_data_quality",
     "register_strategy",
-    "create_adapted_volume_ma_strategy",
-
-    # Main execution functions
-    "run_single_backtest",
-    "run_bayesian_optimization",
-    "run_multi_symbol_optimization",
-    "demonstrate_framework",
+    "create_visualizer",
 
     # Registry
     "strategy_registry"

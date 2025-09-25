@@ -192,10 +192,9 @@ class CryptoBacktester:
             # Calculate costs
             cost = position_size * price
             commission_cost = cost * self.commission
-            total_cost = cost + commission_cost
             
             # Check if we have enough balance
-            if total_cost > self.balance:
+            if cost > self.balance:
                 logger.warning(f"Insufficient balance for {symbol} long position")
                 return
             
@@ -209,25 +208,13 @@ class CryptoBacktester:
                 'stop_loss': price * (1 - self.stop_loss_pct),
                 'take_profit': price * (1 + self.take_profit_pct),
                 'unrealized_pnl': 0.0,
-                'signal': signal
+                'signal': signal,
+                'commission': commission_cost
             }
             
             self.positions[symbol] = position
-            self.balance -= total_cost
-            
-            # Create trade record
-            trade = {
-                'symbol': symbol,
-                'side': 'long',
-                'size': position_size,
-                'entry_price': price,
-                'entry_time': position['entry_time'],
-                'commission': commission_cost,
-                'signal': signal
-            }
-            
-            self.trades.append(trade)
-            self.total_trades += 1
+            # Don't reduce balance - we're using margin/leverage simulation
+            # The balance represents available margin, not cash
 
             logger.info(f"✅ Opened LONG position: {symbol} {position_size} @ {price}")
             logger.info(f"Trade details: SL={position['stop_loss']:.2f}, TP={position['take_profit']:.2f}")
@@ -257,10 +244,9 @@ class CryptoBacktester:
             # Calculate costs
             cost = position_size * price
             commission_cost = cost * self.commission
-            total_cost = cost + commission_cost
             
             # Check if we have enough balance
-            if total_cost > self.balance:
+            if cost > self.balance:
                 logger.warning(f"Insufficient balance for {symbol} short position")
                 return
             
@@ -274,25 +260,13 @@ class CryptoBacktester:
                 'stop_loss': price * (1 + self.stop_loss_pct),
                 'take_profit': price * (1 - self.take_profit_pct),
                 'unrealized_pnl': 0.0,
-                'signal': signal
+                'signal': signal,
+                'commission': commission_cost
             }
             
             self.positions[symbol] = position
-            self.balance -= total_cost
-            
-            # Create trade record
-            trade = {
-                'symbol': symbol,
-                'side': 'short',
-                'size': position_size,
-                'entry_price': price,
-                'entry_time': position['entry_time'],
-                'commission': commission_cost,
-                'signal': signal
-            }
-            
-            self.trades.append(trade)
-            self.total_trades += 1
+            # Don't reduce balance - we're using margin/leverage simulation
+            # The balance represents available margin, not cash
 
             logger.info(f"✅ Opened SHORT position: {symbol} {position_size} @ {price}")
             logger.info(f"Trade details: SL={position['stop_loss']:.2f}, TP={position['take_profit']:.2f}")
@@ -334,7 +308,9 @@ class CryptoBacktester:
             current_data: Current market data
         """
         try:
-            current_price = current_data['close']
+            high_price = current_data['high']
+            low_price = current_data['low']
+            close_price = current_data['close']
             positions_to_close = []
             
             for symbol, position in self.positions.items():
@@ -345,28 +321,35 @@ class CryptoBacktester:
                 
                 should_close = False
                 close_reason = ""
+                exit_price = close_price  # Default to close price
                 
                 if side == 'long':
-                    if current_price <= stop_loss:
+                    # Check stop loss first (more conservative)
+                    if low_price <= stop_loss:
                         should_close = True
                         close_reason = "Stop loss"
-                    elif current_price >= take_profit:
+                        exit_price = stop_loss  # Execute at stop loss price
+                    elif high_price >= take_profit:
                         should_close = True
                         close_reason = "Take profit"
+                        exit_price = take_profit  # Execute at take profit price
                 else:  # short
-                    if current_price >= stop_loss:
+                    # Check stop loss first (more conservative)
+                    if high_price >= stop_loss:
                         should_close = True
                         close_reason = "Stop loss"
-                    elif current_price <= take_profit:
+                        exit_price = stop_loss  # Execute at stop loss price
+                    elif low_price <= take_profit:
                         should_close = True
                         close_reason = "Take profit"
+                        exit_price = take_profit  # Execute at take profit price
                 
                 if should_close:
-                    positions_to_close.append((symbol, close_reason))
+                    positions_to_close.append((symbol, close_reason, exit_price))
             
             # Close positions
-            for symbol, reason in positions_to_close:
-                await self._close_position(symbol, current_price, reason)
+            for symbol, reason, exit_price in positions_to_close:
+                await self._close_position(symbol, exit_price, reason)
                 
         except Exception as e:
             logger.error(f"Error checking exit conditions: {str(e)}")
@@ -388,6 +371,7 @@ class CryptoBacktester:
             side = position['side']
             size = position['size']
             entry_price = position['entry_price']
+            entry_commission = position.get('commission', 0)
             
             # Calculate P&L
             if side == 'long':
@@ -395,28 +379,36 @@ class CryptoBacktester:
             else:  # short
                 pnl = (entry_price - price) * size
             
-            # Calculate commission
-            cost = size * price
-            commission = cost * self.commission
-            net_pnl = pnl - commission
+            # Calculate exit commission
+            exit_cost = size * price
+            exit_commission = exit_cost * self.commission
+            
+            # Net P&L after all commissions
+            net_pnl = pnl - entry_commission - exit_commission
             
             # Update balance
             self.balance += net_pnl
             
-            # Update trade record
+            # Create complete trade record
             trade = {
                 'symbol': symbol,
                 'side': side,
                 'size': size,
                 'entry_price': entry_price,
                 'exit_price': price,
+                'entry_time': position['entry_time'],
                 'exit_time': datetime.now(),
                 'pnl': net_pnl,
-                'commission': commission,
-                'reason': reason
+                'gross_pnl': pnl,
+                'entry_commission': entry_commission,
+                'exit_commission': exit_commission,
+                'total_commission': entry_commission + exit_commission,
+                'reason': reason,
+                'signal': position.get('signal', {})
             }
             
             self.trades.append(trade)
+            self.total_trades += 1
             
             # Update statistics
             if net_pnl > 0:
@@ -429,7 +421,7 @@ class CryptoBacktester:
             # Remove position
             del self.positions[symbol]
             
-            logger.debug(f"Closed {side} position: {symbol} @ {price} (P&L: ${net_pnl:.2f})")
+            logger.info(f"🔚 Closed {side} position: {symbol} @ {price} (P&L: ${net_pnl:.2f}) - {reason}")
             
         except Exception as e:
             logger.error(f"Error closing position: {str(e)}")
@@ -524,22 +516,23 @@ class CryptoBacktester:
             final_balance = self.balance
             total_return = (final_balance - self.initial_balance) / self.initial_balance
             
-            # Trade metrics
-            total_trades = len([t for t in self.trades if 'exit_price' in t])
+            # Trade metrics - only count completed trades
+            completed_trades = [t for t in self.trades if 'exit_price' in t and 'pnl' in t]
+            total_trades = len(completed_trades)
             winning_trades = self.winning_trades
             losing_trades = self.losing_trades
             
             win_rate = winning_trades / max(total_trades, 1)
             
             # Profit factor
-            profit_factor = self.total_profit / max(self.total_loss, 0.01)
+            profit_factor = self.total_profit / max(self.total_loss, 0.01) if self.total_loss > 0 else float('inf')
             
-            # Sharpe ratio (simplified)
+            # Sharpe ratio calculation
             if total_trades > 1:
-                returns = [t.get('pnl', 0) for t in self.trades if 'pnl' in t]
-                if returns:
-                    mean_return = np.mean(returns)
-                    std_return = np.std(returns)
+                trade_returns = [t['pnl'] for t in completed_trades]
+                if trade_returns:
+                    mean_return = np.mean(trade_returns)
+                    std_return = np.std(trade_returns)
                     sharpe_ratio = mean_return / max(std_return, 0.01) * np.sqrt(252)  # Annualized
                 else:
                     sharpe_ratio = 0.0
@@ -547,8 +540,13 @@ class CryptoBacktester:
                 sharpe_ratio = 0.0
             
             # Average trade metrics
-            avg_win = self.total_profit / max(winning_trades, 1)
-            avg_loss = self.total_loss / max(losing_trades, 1)
+            avg_win = self.total_profit / max(winning_trades, 1) if winning_trades > 0 else 0
+            avg_loss = self.total_loss / max(losing_trades, 1) if losing_trades > 0 else 0
+            
+            # Additional metrics
+            total_commission = sum(t.get('total_commission', 0) for t in completed_trades)
+            gross_profit = sum(t.get('gross_pnl', 0) for t in completed_trades if t.get('gross_pnl', 0) > 0)
+            gross_loss = sum(abs(t.get('gross_pnl', 0)) for t in completed_trades if t.get('gross_pnl', 0) < 0)
             
             results = {
                 'initial_balance': self.initial_balance,
@@ -565,7 +563,13 @@ class CryptoBacktester:
                 'avg_loss': avg_loss,
                 'total_profit': self.total_profit,
                 'total_loss': self.total_loss,
-                'trades': self.trades
+                'total_commission': total_commission,
+                'gross_profit': gross_profit,
+                'gross_loss': gross_loss,
+                'trades': completed_trades,
+                'symbol': self.symbol,
+                'commission_rate': self.commission,
+                'slippage_rate': self.slippage
             }
             
             return results

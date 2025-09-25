@@ -16,6 +16,7 @@ import asyncio
 from pathlib import Path
 import importlib.util
 import re
+import time
 from typing import Type
 from datetime import datetime, timedelta
 
@@ -168,25 +169,105 @@ async def run_backtest(
         
         # Run backtest
         logger.info("Running backtest...")
+        start_time = time.time()
         results = await backtester.run(data)
         
+        # Calculate enhanced metrics
+        from src.crypto_backtesting.metrics_calculator import EnhancedMetricsCalculator
+        from src.crypto_backtesting.visualizer import create_visualizer
+        
+        metrics_calculator = EnhancedMetricsCalculator()
+        enhanced_metrics = metrics_calculator.calculate_enhanced_metrics(results)
+        
+        # Generate visualizations
+        logger.info("📊 Generating visualizations...")
+        
+        # Create organized visualization directory structure
+        # results/plots/Strategy/Symbol/Timeframe/Days/
+        plots_base_dir = Path("results/plots")
+        strategy_plots_dir = plots_base_dir / strategy_class.__name__
+        symbol_plots_dir = strategy_plots_dir / symbol.replace('/', '_')
+        timeframe_plots_dir = symbol_plots_dir / timeframe
+        days_plots_dir = timeframe_plots_dir / f"{days}d"
+        
+        # Create directories
+        days_plots_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create visualizer with organized output directory
+        visualizer = create_visualizer(str(days_plots_dir))
+        
+        # Generate comprehensive report
+        report_path = visualizer.create_comprehensive_report(results, symbol)
+        if report_path:
+            logger.info(f"📈 Comprehensive report: {report_path}")
+        
+        # Generate HTML report
+        html_path = visualizer.create_html_report(results, symbol)
+        if html_path:
+            logger.info(f"🌐 HTML report: {html_path}")
+        
+        logger.info(f"📁 Plots organized in: plots/{strategy_class.__name__}/{symbol.replace('/', '_')}/{timeframe}/{days}d/")
+        
         # Display results
-        logger.info("Backtest completed!")
-        logger.info(f"Final Balance: ${results['final_balance']:,.2f}")
-        logger.info(f"Total Return: {results['total_return']:.2%}")
-        logger.info(f"Max Drawdown: {results['max_drawdown']:.2%}")
-        logger.info(f"Total Trades: {results['total_trades']}")
-        logger.info(f"Win Rate: {results['win_rate']:.2%}")
-        logger.info(f"Profit Factor: {results['profit_factor']:.2f}")
-        logger.info(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
+        logger.info("📊 BACKTEST RESULTS")
+        logger.info("=" * 80)
+        logger.info(f"Strategy: {strategy_class.__name__}")
+        logger.info(f"Symbol: {symbol}")
+        logger.info(f"Timeframe: {timeframe}")
+        logger.info(f"Data Points: {len(data)}")
+        logger.info(f"Execution Time: {time.time() - start_time:.2f}s")
+        logger.info("-" * 80)
+        logger.info(f"💰 Final Balance: ${results['final_balance']:,.2f}")
+        logger.info(f"📈 Total Return: {results['total_return']:.2%}")
+        logger.info(f"📉 Max Drawdown: {results['max_drawdown']:.2%}")
+        logger.info(f"📊 Total Trades: {results['total_trades']}")
+        logger.info(f"🎯 Win Rate: {results['win_rate']:.2%}")
+        logger.info(f"⚖️ Profit Factor: {results['profit_factor']:.2f}")
+        logger.info(f"📊 Sharpe Ratio: {results['sharpe_ratio']:.2f}")
+        logger.info("-" * 80)
+        logger.info("🔍 ENHANCED METRICS")
+        logger.info("-" * 80)
+        logger.info(f"Sortino Ratio: {enhanced_metrics.get('Sortino_Ratio', 0):.2f}")
+        logger.info(f"Calmar Ratio: {enhanced_metrics.get('Calmar_Ratio', 0):.2f}")
+        logger.info(f"Kelly %: {enhanced_metrics.get('Kelly_Percentage', 0):.2f}%")
+        logger.info(f"Risk of Ruin: {enhanced_metrics.get('Risk_of_Ruin', 0):.2f}%")
+        logger.info(f"Quality Score: {enhanced_metrics.get('Strategy_Quality_Score', 0):.1f}/100")
         
-        # Save results
-        results_file = data_file.parent / f"results_{strategy_class.__name__}_{symbol.replace('/', '_')}_{timeframe}_{days}d.json"
+        # Save results in organized directory structure
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Create organized directory structure: results/Strategy/Symbol/Timeframe/Days/
+        results_base_dir = Path("results")
+        strategy_dir = results_base_dir / strategy_class.__name__
+        symbol_dir = strategy_dir / symbol.replace('/', '_')
+        timeframe_dir = symbol_dir / timeframe
+        days_dir = timeframe_dir / f"{days}d"
+        
+        # Create directories if they don't exist
+        days_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create filename with timestamp
+        filename = f"backtest_results_{timestamp}.json"
+        results_file = days_dir / filename
+        
         import json
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
         
-        logger.info(f"Results saved to: {results_file}")
+        # Combine basic and enhanced results
+        full_results = {
+            'basic_results': results,
+            'enhanced_metrics': enhanced_metrics,
+            'execution_time': time.time() - start_time,
+            'strategy': strategy_class.__name__,
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'data_points': len(data)
+        }
+        
+        with open(results_file, 'w') as f:
+            json.dump(full_results, f, indent=2, default=str)
+        
+        logger.info(f"💾 Results saved: {results_file}")
+        logger.info(f"📁 Organized in: {strategy_dir.name}/{symbol_dir.name}/{timeframe_dir.name}/{days_dir.name}/")
         
     except Exception as e:
         logger.error(f"Backtest failed: {str(e)}")

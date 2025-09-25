@@ -34,7 +34,7 @@ class EnhancedMetricsCalculator:
         Calculate enhanced performance metrics.
 
         Args:
-            result: Backtest result dictionary from backtesting.py
+            result: Backtest result dictionary from our crypto backtester
 
         Returns:
             Dictionary with enhanced metrics
@@ -42,35 +42,55 @@ class EnhancedMetricsCalculator:
         try:
             metrics = {}
 
-            # Basic metrics
-            metrics['Return'] = result.get('Return [%]', 0)
-            metrics['Sharpe'] = result.get('Sharpe Ratio', 0)
-            metrics['Max_Drawdown'] = result.get('Max. Drawdown [%]', 0)
-            metrics['Trades'] = result.get('# Trades', 0)
-            metrics['Win_Rate'] = result.get('Win Rate [%]', 0)
-            metrics['Profit_Factor'] = result.get('Profit Factor', 0)
-            metrics['Avg_Trade'] = result.get('Avg. Trade [%]', 0)
-            metrics['Best_Trade'] = result.get('Best Trade [%]', 0)
-            metrics['Worst_Trade'] = result.get('Worst Trade [%]', 0)
+            # Basic metrics - map from our backtester's key names
+            metrics['Return'] = result.get('total_return', 0) * 100  # Convert to percentage
+            metrics['Sharpe'] = result.get('sharpe_ratio', 0)
+            metrics['Max_Drawdown'] = result.get('max_drawdown', 0) * 100  # Convert to percentage
+            metrics['Trades'] = result.get('total_trades', 0)
+            metrics['Win_Rate'] = result.get('win_rate', 0) * 100  # Convert to percentage
+            metrics['Profit_Factor'] = result.get('profit_factor', 0)
+            
+            # Calculate additional metrics from available data
+            total_profit = result.get('total_profit', 0)
+            total_loss = result.get('total_loss', 0)
+            total_trades = result.get('total_trades', 0)
+            
+            if total_trades > 0:
+                metrics['Avg_Trade'] = (total_profit - total_loss) / total_trades
+            else:
+                metrics['Avg_Trade'] = 0
+                
+            # Best and worst trade from individual trades
+            if 'trades' in result and result['trades']:
+                trade_pnls = [t.get('pnl', 0) for t in result['trades'] if 'pnl' in t]
+                if trade_pnls:
+                    metrics['Best_Trade'] = max(trade_pnls)
+                    metrics['Worst_Trade'] = min(trade_pnls)
+                else:
+                    metrics['Best_Trade'] = 0
+                    metrics['Worst_Trade'] = 0
+            else:
+                metrics['Best_Trade'] = 0
+                metrics['Worst_Trade'] = 0
 
             # Enhanced risk metrics
             metrics['Calmar_Ratio'] = self._calculate_calmar_ratio(metrics)
-            metrics['Sortino_Ratio'] = self._calculate_sortino_ratio(result)
+            metrics['Sortino_Ratio'] = self._calculate_sortino_ratio_crypto(result)
             metrics['Recovery_Factor'] = self._calculate_recovery_factor(metrics)
             metrics['Payoff_Ratio'] = self._calculate_payoff_ratio(metrics)
 
             # Advanced metrics
-            metrics['Expectancy'] = self._calculate_expectancy(result, metrics)
+            metrics['Expectancy'] = self._calculate_expectancy_crypto(result, metrics)
             metrics['Ulcer_Index'] = self._calculate_ulcer_index(metrics)
             metrics['MAR_Ratio'] = self._calculate_mar_ratio(metrics)
 
             # Statistical metrics
-            metrics['Volatility'] = self._calculate_volatility(result)
-            metrics['VaR_95'] = self._calculate_var(result, 0.95)
-            metrics['CVaR_95'] = self._calculate_cvar(result, 0.95)
+            metrics['Volatility'] = self._calculate_volatility_crypto(result)
+            metrics['VaR_95'] = self._calculate_var_crypto(result, 0.95)
+            metrics['CVaR_95'] = self._calculate_cvar_crypto(result, 0.95)
 
             # Trade analysis metrics
-            trade_metrics = self._analyze_trades(result)
+            trade_metrics = self._analyze_trades_crypto(result)
             metrics.update(trade_metrics)
 
             # Performance quality metrics
@@ -95,17 +115,20 @@ class EnhancedMetricsCalculator:
         except:
             return 0.0
 
-    def _calculate_sortino_ratio(self, result: Dict[str, Any]) -> float:
-        """Calculate Sortino ratio using downside deviation."""
+    def _calculate_sortino_ratio_crypto(self, result: Dict[str, Any]) -> float:
+        """Calculate Sortino ratio using downside deviation for crypto backtester."""
         try:
-            if hasattr(result, '_trades') and len(result._trades) > 0:
+            sharpe_ratio = result.get('sharpe_ratio', 0)
+            max_drawdown = result.get('max_drawdown', 0)
+            
+            if 'trades' in result and result['trades']:
                 trade_returns = []
-                for trade in result._trades:
+                for trade in result['trades']:
                     try:
-                        if hasattr(trade, 'PnL') and hasattr(trade, 'Size') and trade.Size != 0:
-                            entry_value = abs(trade.Size * getattr(trade, 'EntryPrice', getattr(trade, 'ExitPrice', 1)))
+                        if 'pnl' in trade and 'size' in trade and trade['size'] != 0:
+                            entry_value = abs(trade['size'] * trade.get('entry_price', 1))
                             if entry_value > 0:
-                                pct_return = (trade.PnL / entry_value) * 100
+                                pct_return = (trade['pnl'] / entry_value) * 100
                                 trade_returns.append(pct_return)
                     except:
                         continue
@@ -119,21 +142,21 @@ class EnhancedMetricsCalculator:
                             avg_return = np.mean(trade_returns)
                             return avg_return / downside_deviation
                         else:
-                            return abs(metrics['Sharpe']) * 1.5
+                            return abs(sharpe_ratio) * 1.5
                     else:
-                        return abs(metrics['Sharpe']) * 1.5
+                        return abs(sharpe_ratio) * 1.5
                 else:
-                    return abs(metrics['Sharpe'])
+                    return abs(sharpe_ratio)
             else:
                 # Fallback calculation
-                if metrics['Max_Drawdown'] > 0:
-                    downside_factor = max(0.5, 1 - (abs(metrics['Max_Drawdown']) / 100))
-                    return abs(metrics['Sharpe']) / max(0.7, downside_factor)
+                if max_drawdown > 0:
+                    downside_factor = max(0.5, 1 - (abs(max_drawdown) / 100))
+                    return abs(sharpe_ratio) / max(0.7, downside_factor)
                 else:
-                    return abs(metrics['Sharpe']) * 1.2
+                    return abs(sharpe_ratio) * 1.2
 
         except:
-            return abs(metrics['Sharpe']) * 1.1
+            return abs(sharpe_ratio) * 1.1
 
     def _calculate_recovery_factor(self, metrics: Dict[str, Any]) -> float:
         """Calculate recovery factor (net profit / max drawdown)."""
@@ -156,17 +179,19 @@ class EnhancedMetricsCalculator:
         except:
             return 0.0
 
-    def _calculate_expectancy(self, result: Dict[str, Any], metrics: Dict[str, Any]) -> float:
-        """Calculate expectancy (win rate * avg win - loss rate * avg loss)."""
+    def _calculate_expectancy_crypto(self, result: Dict[str, Any], metrics: Dict[str, Any]) -> float:
+        """Calculate expectancy (win rate * avg win - loss rate * avg loss) for crypto backtester."""
         try:
             if metrics['Trades'] > 0 and 0 < metrics['Win_Rate'] < 100:
                 win_prob = metrics['Win_Rate'] / 100
                 loss_prob = 1 - win_prob
 
-                if metrics['Best_Trade'] != 0 and metrics['Worst_Trade'] != 0:
-                    avg_win_est = abs(metrics['Best_Trade']) * 0.6
-                    avg_loss_est = abs(metrics['Worst_Trade']) * 0.6
-                    return (win_prob * avg_win_est) - (loss_prob * avg_loss_est)
+                # Use actual average win/loss from backtester
+                avg_win = result.get('avg_win', 0)
+                avg_loss = result.get('avg_loss', 0)
+                
+                if avg_win > 0 and avg_loss > 0:
+                    return (win_prob * avg_win) - (loss_prob * avg_loss)
                 else:
                     return metrics['Avg_Trade']
             else:
@@ -192,17 +217,17 @@ class EnhancedMetricsCalculator:
         except:
             return 0.0
 
-    def _calculate_volatility(self, result: Dict[str, Any]) -> float:
-        """Calculate strategy volatility."""
+    def _calculate_volatility_crypto(self, result: Dict[str, Any]) -> float:
+        """Calculate strategy volatility for crypto backtester."""
         try:
-            if hasattr(result, '_trades') and len(result._trades) > 1:
+            if 'trades' in result and len(result['trades']) > 1:
                 trade_returns = []
-                for trade in result._trades:
+                for trade in result['trades']:
                     try:
-                        if hasattr(trade, 'PnL') and hasattr(trade, 'Size') and trade.Size != 0:
-                            entry_value = abs(trade.Size * getattr(trade, 'EntryPrice', getattr(trade, 'ExitPrice', 1)))
+                        if 'pnl' in trade and 'size' in trade and trade['size'] != 0:
+                            entry_value = abs(trade['size'] * trade.get('entry_price', 1))
                             if entry_value > 0:
-                                pct_return = (trade.PnL / entry_value) * 100
+                                pct_return = (trade['pnl'] / entry_value) * 100
                                 trade_returns.append(pct_return)
                     except:
                         continue
@@ -216,17 +241,17 @@ class EnhancedMetricsCalculator:
         except:
             return 0.0
 
-    def _calculate_var(self, result: Dict[str, Any], confidence: float = 0.95) -> float:
-        """Calculate Value at Risk."""
+    def _calculate_var_crypto(self, result: Dict[str, Any], confidence: float = 0.95) -> float:
+        """Calculate Value at Risk for crypto backtester."""
         try:
-            if hasattr(result, '_trades') and len(result._trades) > 1:
+            if 'trades' in result and len(result['trades']) > 1:
                 trade_returns = []
-                for trade in result._trades:
+                for trade in result['trades']:
                     try:
-                        if hasattr(trade, 'PnL') and hasattr(trade, 'Size') and trade.Size != 0:
-                            entry_value = abs(trade.Size * getattr(trade, 'EntryPrice', getattr(trade, 'ExitPrice', 1)))
+                        if 'pnl' in trade and 'size' in trade and trade['size'] != 0:
+                            entry_value = abs(trade['size'] * trade.get('entry_price', 1))
                             if entry_value > 0:
-                                pct_return = (trade.PnL / entry_value) * 100
+                                pct_return = (trade['pnl'] / entry_value) * 100
                                 trade_returns.append(pct_return)
                     except:
                         continue
@@ -240,17 +265,17 @@ class EnhancedMetricsCalculator:
         except:
             return 0.0
 
-    def _calculate_cvar(self, result: Dict[str, Any], confidence: float = 0.95) -> float:
-        """Calculate Conditional Value at Risk (Expected Shortfall)."""
+    def _calculate_cvar_crypto(self, result: Dict[str, Any], confidence: float = 0.95) -> float:
+        """Calculate Conditional Value at Risk (Expected Shortfall) for crypto backtester."""
         try:
-            if hasattr(result, '_trades') and len(result._trades) > 1:
+            if 'trades' in result and len(result['trades']) > 1:
                 trade_returns = []
-                for trade in result._trades:
+                for trade in result['trades']:
                     try:
-                        if hasattr(trade, 'PnL') and hasattr(trade, 'Size') and trade.Size != 0:
-                            entry_value = abs(trade.Size * getattr(trade, 'EntryPrice', getattr(trade, 'ExitPrice', 1)))
+                        if 'pnl' in trade and 'size' in trade and trade['size'] != 0:
+                            entry_value = abs(trade['size'] * trade.get('entry_price', 1))
                             if entry_value > 0:
-                                pct_return = (trade.PnL / entry_value) * 100
+                                pct_return = (trade['pnl'] / entry_value) * 100
                                 trade_returns.append(pct_return)
                     except:
                         continue
@@ -269,8 +294,8 @@ class EnhancedMetricsCalculator:
         except:
             return 0.0
 
-    def _analyze_trades(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze individual trades for detailed metrics."""
+    def _analyze_trades_crypto(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze individual trades for detailed metrics for crypto backtester."""
         try:
             trade_analysis = {
                 'Profitable_Trades': 0,
@@ -285,7 +310,7 @@ class EnhancedMetricsCalculator:
                 'Trade_Duration_Avg': 0.0
             }
 
-            if hasattr(result, '_trades') and len(result._trades) > 0:
+            if 'trades' in result and len(result['trades']) > 0:
                 profitable_trades = []
                 losing_trades = []
                 win_streak = 0
@@ -293,12 +318,12 @@ class EnhancedMetricsCalculator:
                 max_win_streak = 0
                 max_loss_streak = 0
 
-                for trade in result._trades:
+                for trade in result['trades']:
                     try:
-                        if hasattr(trade, 'PnL') and hasattr(trade, 'Size') and trade.Size != 0:
-                            entry_value = abs(trade.Size * getattr(trade, 'EntryPrice', getattr(trade, 'ExitPrice', 1)))
+                        if 'pnl' in trade and 'size' in trade and trade['size'] != 0:
+                            entry_value = abs(trade['size'] * trade.get('entry_price', 1))
                             if entry_value > 0:
-                                pct_return = (trade.PnL / entry_value) * 100
+                                pct_return = (trade['pnl'] / entry_value) * 100
 
                                 if pct_return > 0.01:  # Small threshold for even trades
                                     profitable_trades.append(pct_return)

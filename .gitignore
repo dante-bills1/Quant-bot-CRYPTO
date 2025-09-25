@@ -79,4 +79,7 @@ __pycache__/
 *$py.class
 
 # Next.js
-.next/ 
+.next/
+
+# Backtest results and visualizations
+results/ 
