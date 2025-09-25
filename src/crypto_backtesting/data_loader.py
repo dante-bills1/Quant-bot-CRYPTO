@@ -43,7 +43,31 @@ def load_crypto_historical_data(file_path: Path) -> Optional[pd.DataFrame]:
             # Assume timestamp is in milliseconds
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         else:
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # Handle missing or empty timestamp values
+            try:
+                # Check if timestamp column has any valid values
+                if df['timestamp'].isna().all() or (df['timestamp'] == '').all():
+                    # Generate synthetic timestamps if all are missing
+                    logger.warning("No valid timestamps found, generating synthetic timestamps")
+                    start_time = datetime.now() - timedelta(days=int(file_path.name.split('_')[-2][:-1]))
+                    timestamps = pd.date_range(start=start_time, periods=len(df), freq='4H')
+                    df['timestamp'] = timestamps
+                else:
+                    # Convert existing timestamps, handling errors gracefully
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+                    # Fill any remaining NaT values with synthetic timestamps
+                    if df['timestamp'].isna().any():
+                        logger.warning(f"Found {df['timestamp'].isna().sum()} invalid timestamps, filling with synthetic values")
+                        nat_indices = df['timestamp'].isna()
+                        # Generate timestamps starting from a reasonable point
+                        first_valid_time = df['timestamp'].dropna().iloc[0] if df['timestamp'].dropna().any() else datetime.now() - timedelta(hours=len(df))
+                        synthetic_timestamps = pd.date_range(start=first_valid_time, periods=nat_indices.sum(), freq='4H')
+                        df.loc[nat_indices, 'timestamp'] = synthetic_timestamps
+            except Exception as e:
+                logger.error(f"Error converting timestamps: {e}")
+                # Generate completely synthetic timestamps as fallback
+                start_time = datetime.now() - timedelta(days=7)
+                df['timestamp'] = pd.date_range(start=start_time, periods=len(df), freq='4H')
         
         # Set timestamp as index
         df.set_index('timestamp', inplace=True)

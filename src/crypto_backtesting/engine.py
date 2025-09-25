@@ -31,7 +31,8 @@ class CryptoBacktester:
         initial_balance: float = 10000,
         commission: float = 0.001,
         slippage: float = 0.0005,
-        max_leverage: float = 10.0
+        max_leverage: float = 10.0,
+        symbol: str = "BTC/USDT:USDT"
     ):
         """
         Initialize the crypto backtester.
@@ -42,8 +43,10 @@ class CryptoBacktester:
             commission: Commission rate (0.001 = 0.1%)
             slippage: Slippage rate (0.0005 = 0.05%)
             max_leverage: Maximum leverage allowed
+            symbol: Trading symbol
         """
         self.strategy = strategy
+        self.symbol = symbol
         self.initial_balance = initial_balance
         self.commission = commission
         self.slippage = slippage
@@ -106,7 +109,7 @@ class CryptoBacktester:
                 await self._check_exit_conditions(current_data)
                 
                 # Generate signals
-                signals = await self.strategy.generate_signals(current_data)
+                signals = await self.strategy.generate_signals(current_data, symbol=self.symbol)
                 
                 # Process signals
                 for signal in signals:
@@ -135,28 +138,37 @@ class CryptoBacktester:
     async def _process_signal(self, signal: Dict[str, Any], current_data: Dict[str, Any]):
         """
         Process a trading signal.
-        
+
         Args:
             signal: Signal dictionary
             current_data: Current market data
         """
         try:
             action = signal.get('action', '').lower()
+            signal_type = signal.get('signal_type', '').lower()
             confidence = signal.get('confidence', 0)
-            
+
+            logger.debug(f"Processing signal: action={action}, signal_type={signal_type}, confidence={confidence}")
+
             if action == 'hold' or confidence < 0.6:
+                logger.debug(f"Skipping signal: action={action}, confidence={confidence}")
                 return
-            
+
             symbol = signal.get('symbol', 'BTC/USDT:USDT')
             current_price = current_data['close']
-            
+
+            logger.debug(f"Opening position: {action} {symbol} @ {current_price}")
+
             if action == 'buy':
                 await self._open_long_position(symbol, current_price, signal)
             elif action == 'sell':
                 await self._open_short_position(symbol, current_price, signal)
-                
+            else:
+                logger.warning(f"Unknown action type: {action}")
+
         except Exception as e:
             logger.error(f"Error processing signal: {str(e)}")
+            logger.error(f"Signal data: {signal}")
     
     async def _open_long_position(self, symbol: str, price: float, signal: Dict[str, Any]):
         """
@@ -216,9 +228,10 @@ class CryptoBacktester:
             
             self.trades.append(trade)
             self.total_trades += 1
-            
-            logger.debug(f"Opened long position: {symbol} {position_size} @ {price}")
-            
+
+            logger.info(f"✅ Opened LONG position: {symbol} {position_size} @ {price}")
+            logger.info(f"Trade details: SL={position['stop_loss']:.2f}, TP={position['take_profit']:.2f}")
+
         except Exception as e:
             logger.error(f"Error opening long position: {str(e)}")
     
@@ -280,9 +293,10 @@ class CryptoBacktester:
             
             self.trades.append(trade)
             self.total_trades += 1
-            
-            logger.debug(f"Opened short position: {symbol} {position_size} @ {price}")
-            
+
+            logger.info(f"✅ Opened SHORT position: {symbol} {position_size} @ {price}")
+            logger.info(f"Trade details: SL={position['stop_loss']:.2f}, TP={position['take_profit']:.2f}")
+
         except Exception as e:
             logger.error(f"Error opening short position: {str(e)}")
     

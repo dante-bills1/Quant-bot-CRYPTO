@@ -153,8 +153,7 @@ async def run_backtest(
         # Initialize strategy
         logger.info("Initializing strategy...")
         strategy = strategy_class(
-            symbol=symbol,
-            timeframe=timeframe
+            primary_timeframe=timeframe
         )
         
         # Initialize backtester
@@ -163,7 +162,8 @@ async def run_backtest(
             strategy=strategy,
             initial_balance=10000,  # $10,000 starting balance
             commission=0.001,  # 0.1% commission
-            slippage=0.0005  # 0.05% slippage
+            slippage=0.0005,  # 0.05% slippage
+            symbol=symbol
         )
         
         # Run backtest

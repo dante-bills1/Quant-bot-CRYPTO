@@ -5,12 +5,8 @@ This strategy is ported from the reference file volume_ma_live_updated_v3.py
 and adapted for the crypto trading bot framework.
 """
 
-import asyncio
-import time
-import math
-import json
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -174,64 +170,142 @@ class VolumeMAOscillator(SignalGenerator):
         """Generate trading signals based on Volume MA Oscillator."""
         try:
             if market_data is None:
+                logger.debug("No market data provided to generate_signals")
                 return []
+
+            logger.debug(f"Received market_data type: {type(market_data)}")
+            logger.debug(f"Market data keys: {list(market_data.keys()) if isinstance(market_data, dict) else 'Not a dict'}")
             
             signals = []
             
+            # Comprehensive NaT handling function
+            def clean_dataframe_nat(df):
+                """Remove all NaT values from DataFrame index and data."""
+                if df is None or df.empty:
+                    return df
+                
+                # Clean index
+                if hasattr(df.index, 'isna'):
+                    valid_mask = ~df.index.isna()
+                    df = df[valid_mask]
+                
+                # Clean data columns
+                for col in df.columns:
+                    if df[col].dtype == 'datetime64[ns]':
+                        df = df[~df[col].isna()]
+                
+                return df
+            
             # Handle different input formats
-            if isinstance(market_data, dict):
+            if isinstance(market_data, dict) and 'close' in market_data:
+                # Handle single row dictionary from backtester (current_data format)
+                try:
+                    # Convert single row dict to DataFrame format
+                    row_data = market_data.copy()
+
+                    # If we already have historical data, append this new row
+                    if hasattr(self, '_historical_data') and self._historical_data is not None:
+                        # Append new row to existing data
+                        new_row_df = pd.DataFrame([row_data], index=[row_data['timestamp']])
+                        combined_df = pd.concat([self._historical_data, new_row_df])
+                    else:
+                        # First row, create initial DataFrame
+                        combined_df = pd.DataFrame([row_data], index=[row_data['timestamp']])
+
+                    # Store the accumulated data for next iteration
+                    self._historical_data = combined_df
+
+                    # Check if we have enough data for analysis
+                    if len(combined_df) < self.min_candles:
+                        logger.debug(f"Insufficient historical data: {len(combined_df)} < {self.min_candles}")
+                        return []
+
+                    # Calculate indicators on the most recent data (use lookback for recent analysis)
+                    recent_df = combined_df.tail(self.lookback) if len(combined_df) >= self.lookback else combined_df
+                    indicators = self._calculate_indicators(recent_df)
+
+                    # Check for signals
+                    logger.debug(f"Checking signals for single row with {len(combined_df)} historical points")
+
+                    # Debug: Log the signal conditions
+                    long_cond = indicators.get("long_cond", pd.Series(False, index=recent_df.index))
+                    short_cond = indicators.get("short_cond", pd.Series(False, index=recent_df.index))
+                    logger.debug(f"Long condition: {long_cond.iloc[-1] if len(long_cond) > 0 else 'No data'}, Short condition: {short_cond.iloc[-1] if len(short_cond) > 0 else 'No data'}")
+
+                    signal = self._check_signal(recent_df, indicators, symbol or "UNKNOWN")
+                    if signal:
+                        logger.info(f"Generated signal from single row: {signal}")
+                        signals.append(signal)
+                    else:
+                        logger.debug(f"No signal generated from single row")
+
+                except Exception as e:
+                    logger.error(f"Error processing single row data: {e}")
+                    return []
+            elif isinstance(market_data, dict):
                 # Expected format: {symbol: {timeframe: DataFrame}}
                 for sym, timeframes in market_data.items():
+                    # Skip if timeframes is NaT or not a dict
+                    if not isinstance(timeframes, dict) or pd.isna(timeframes):
+                        continue
                     if self.primary_timeframe not in timeframes:
                         continue
-                    
+
                     df = timeframes[self.primary_timeframe]
+                    df = clean_dataframe_nat(df)
                     if df is None or df.empty or len(df) < self.min_candles:
                         continue
-                    
+
                     # Calculate indicators
                     indicators = self._calculate_indicators(df)
-                    
+
                     # Check for signals
+                    logger.debug(f"Checking signals for {sym} with {len(df)} data points")
                     signal = self._check_signal(df, indicators, sym)
                     if signal:
+                        logger.info(f"Generated signal: {signal}")
                         signals.append(signal)
+                    else:
+                        logger.debug(f"No signal generated for {sym}")
             else:
                 # Handle single DataFrame input (from backtesting engine)
                 df = market_data
+                df = clean_dataframe_nat(df)
                 if df is None or df.empty or len(df) < self.min_candles:
                     return []
-                
-                # Clean DataFrame index - remove NaT values
-                df_clean = df.copy()
-                if hasattr(df_clean.index, 'isna'):
-                    # Remove rows with NaT index values
-                    valid_mask = ~df_clean.index.isna()
-                    df_clean = df_clean[valid_mask]
-                
-                if len(df_clean) < self.min_candles:
-                    return []
-                
+
                 # Calculate indicators
-                indicators = self._calculate_indicators(df_clean)
-                
+                indicators = self._calculate_indicators(df)
+
                 # Check for signals
-                signal = self._check_signal(df_clean, indicators, symbol or "UNKNOWN")
+                signal = self._check_signal(df, indicators, symbol or "UNKNOWN")
                 if signal:
                     signals.append(signal)
-            
+
+            logger.debug(f"generate_signals returning {len(signals)} signals")
             return signals
             
         except Exception as e:
+            import traceback
             logger.error(f"Error generating signals: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
     
     def _calculate_indicators(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
         """Calculate all indicators for the strategy."""
         try:
+            # Ensure DataFrame index is clean and has no NaT values
+            df_clean = df.copy()
+            if hasattr(df_clean.index, 'isna'):
+                valid_mask = ~df_clean.index.isna()
+                df_clean = df_clean[valid_mask]
+            
+            # Reset index to ensure clean integer indexing
+            df_clean = df_clean.reset_index(drop=True)
+            
             # Get source data
-            src = df[self.params.source].astype(float)
-            vol = df["volume"].astype(float)
+            src = df_clean[self.params.source].astype(float)
+            vol = df_clean["volume"].astype(float)
             
             # Calculate volume weighted moving average
             ma_series = self._volume_weighted_ma(src, vol, self.params.ma_length, self.params.ma_type)
@@ -251,11 +325,11 @@ class VolumeMAOscillator(SignalGenerator):
             lower = self._smooth_series(lower_raw, self.params.band_smoothing)
             
             # Calculate ATR
-            atr = self._calculate_atr(df, self.params.atr_length)
+            atr = self._calculate_atr(df_clean, self.params.atr_length)
             
             # Calculate filters
-            volume_filter = self._calculate_volume_filter(df)
-            trend_filter = self._calculate_trend_filter(df)
+            volume_filter = self._calculate_volume_filter(df_clean)
+            trend_filter = self._calculate_trend_filter(df_clean)
             
             # Calculate crossover signals
             trend_long = self._crossover(price_diff, upper)
@@ -458,7 +532,8 @@ class VolumeMAOscillator(SignalGenerator):
             signal = {
                 "symbol": symbol,
                 "timeframe": self.primary_timeframe,
-                "signal_type": direction,
+                "action": direction,  # Backtester expects 'action', not 'signal_type'
+                "signal_type": direction,  # Keep for compatibility
                 "entry_price": current_price,
                 "stop_loss": stop_loss,
                 "take_profit": take_profit,
