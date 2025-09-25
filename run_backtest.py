@@ -77,7 +77,7 @@ async def main():
             print("   - Comprehensive performance report (PNG)")
             print("   - Individual plots (equity curve, drawdown, trade analysis)")
             print("   - Interactive HTML report")
-            print(f"   - Check the 'results/plots/{config.strategy_name}' directory")
+            print(f"   - Organized in: results/plots/{config.strategy_name}/{config.symbol.replace('/', '_')}/{config.timeframe}/{config.days}d/")
         
         return 0
         
