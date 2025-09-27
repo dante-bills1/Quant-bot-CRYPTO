@@ -373,3 +373,22 @@ def register_strategy(name: str):
         strategy_registry.register_strategy(name, strategy_class)
         return strategy_class
     return decorator
+
+
+# Import and register strategy templates
+try:
+    from ..strategy.strategy_template import (
+        BasicStrategyTemplate,
+        SingleTimeframeExample,
+        MultiTimeframeExample,
+        BacktestCompatibleStrategy
+    )
+
+    # Register template strategies
+    strategy_registry.register_strategy("BasicStrategyTemplate", BasicStrategyTemplate)
+    strategy_registry.register_strategy("SingleTimeframeExample", SingleTimeframeExample)
+    strategy_registry.register_strategy("MultiTimeframeExample", MultiTimeframeExample)
+    strategy_registry.register_strategy("BacktestCompatibleStrategy", BacktestCompatibleStrategy)
+
+except ImportError as e:
+    logger.warning(f"Could not import strategy templates: {e}")
