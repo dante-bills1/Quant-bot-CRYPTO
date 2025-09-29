@@ -657,22 +657,6 @@ If you encounter import errors after the folder reorganization:
    ```
 4. **Test imports**: Use `python -c "from src.trading_bot import TradingBot; print('Success!')"` to verify
 
-### Folder Structure Changes
-
-The following files have been moved to new locations:
-
-| Old Location | New Location | Purpose |
-|-------------|-------------|---------|
-| `src/crypto_handler.py` | `src/utils/crypto_handler.py` | Core exchange handler |
-| `src/crypto_signal_processor.py` | `src/utils/crypto_signal_processor.py` | Signal processing |
-| `src/crypto_performance_tracker.py` | `src/utils/crypto_performance_tracker.py` | Performance tracking |
-| `src/websocket_manager.py` | `src/utils/websocket_manager.py` | WebSocket management |
-| `src/crypto_data_manager.py` | `src/managers/crypto_data_manager.py` | Data management |
-| `src/crypto_position_manager.py` | `src/managers/crypto_position_manager.py` | Position management |
-| `src/crypto_risk_manager.py` | `src/managers/crypto_risk_manager.py` | Risk management |
-| `src/crypto_state_manager.py` | `src/managers/crypto_state_manager.py` | State management |
-| `src/crypto_exchange.py` | `src/exchanges/crypto_exchange.py` | Exchange abstraction |
-
 ## 🤝 Contributing
 
 This is a professional trading system. Contributions should:
